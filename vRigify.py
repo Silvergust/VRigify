@@ -77,11 +77,14 @@ class Pair:
 class VRigify:
     def __init__(self, armature):
         self.armature = armature
-        #self.base_original_upper_leg_editbone = 
-        #self.base_original_lower_leg_editbone = 
+        self.base_upper_leg_editbones = Pair(edit_bones["J_Bip_L_UpperLeg"], edit_bones["J_Bip_R_UpperLeg"])
+        self.base_lower_leg_editbones = Pair(edit_bones["J_Bip_L_LowerLeg"], edit_bones["J_Bip_R_LowerLeg"])
         
         self.base_foot_editbones = Pair(edit_bones['J_Bip_L_Foot'], edit_bones['J_Bip_R_Foot'])
         self.base_toe_editbones = Pair(edit_bones['J_Bip_L_ToeBase'], edit_bones['J_Bip_R_ToeBase'])
+        
+        self.leg_parent = Pair()
+        self.leg_socket = Pair()
         
     def add_heel_mechanism(self, side_string):
         bpy.ops.object.mode_set(mode='EDIT')
@@ -129,37 +132,39 @@ class VRigify:
         limit_rot_constraint.min_x = -3.14
         
 
-    def add_leg_fk_mechanism(armature, side_string):
+    def add_leg_socket_mechanism(self, side):
         bpy.ops.object.mode_set(mode='EDIT')
         
-        upper_leg_bone = edit_bones["J_Bip_" + side_string + "_UpperLeg"]
-        lower_leg_bone = edit_bones["J_Bip_" + side_string + "_LowerLeg"]
-        foot_bone = edit_bones["J_Bip_" + side_string + "_Foot"]
+        #upper_leg_bone = edit_bones["J_Bip_" + side_string + "_UpperLeg"]
+        #lower_leg_bone = edit_bones["J_Bip_" + side_string + "_LowerLeg"]
+        foot_bone = edit_bones["J_Bip_" + side + "_Foot"]
         hips_bone = edit_bones["J_Bip_C_Hips"]
         
-        upper_leg_editbone = armature.data.edit_bones.new("MCH_UpperLeg_FK_" + side_string)
-        upper_leg_editbone.head = upper_leg_bone.head
-        upper_leg_editbone.tail = lower_leg_bone.head
+        #upper_leg_editbone = armature.data.edit_bones.new("MCH_UpperLeg_FK_" + side_string)
+        #upper_leg_editbone.head = self.base_upper_leg_editbones[side].head
+        #upper_leg_editbone.tail = self.base_lower_leg_editbones.head
         
-        lower_leg_editbone = armature.data.edit_bones.new("MCH_LowerLeg_FK_" + side_string)
-        lower_leg_editbone.head = lower_leg_bone.head
-        lower_leg_editbone.tail = foot_bone.head
+        #lower_leg_editbone = armature.data.edit_bones.new("MCH_LowerLeg_FK_" + side_string)
+        #lower_leg_editbone.head = lower_leg_bone.head
+        #lower_leg_editbone.tail = foot_bone.head
         
-        leg_parent = armature.data.edit_bones.new('MCH_LegParent_' + side_string)
-        leg_parent.head = upper_leg_bone.head
-        leg_parent.tail = upper_leg_bone.head + Vector((0, -0.1, 0))
+        self.leg_parent[side] = armature.data.edit_bones.new('MCH_LegParent_' + side)
+        self.leg_parent[side].head = self.base_upper_leg_editbones[side].head
+        self.leg_parent[side].tail = self.base_upper_leg_editbones[side].head + Vector((0, -0.1, 0))
         
-        leg_socket = armature.data.edit_bones.new('MCH_LegSocket_' + side_string)
-        leg_socket.head = upper_leg_bone.head
-        leg_socket.tail = upper_leg_bone.head + Vector((0, -0.05, 0))
+        self.leg_socket[side] = armature.data.edit_bones.new('MCH_LegSocket_' + side)
+        self.leg_socket[side].head = self.base_upper_leg_editbones[side].head
+        self.leg_socket[side].tail = self.base_upper_leg_editbones[side].head + Vector((0, -0.05, 0))
         
-        leg_socket.parent = hips_bone
-        upper_leg_editbone.parent = leg_parent
-        lower_leg_editbone.parent = upper_leg_editbone
+        self.leg_socket[side].parent = hips_bone
+        #upper_leg_editbone.parent = self.leg_parent[side]
+        #lower_leg_editbone.parent = upper_leg_editbone
+        self.base_upper_leg_editbones[side].parent = self.leg_parent[side]
+        self.base_lower_leg_editbones[side].parent = self.base_upper_leg_editbones[side]
          
         bpy.ops.object.mode_set(mode='POSE')
-        leg_socket_posebone = pose_bones[leg_socket.name]
-        leg_parent_posebone = pose_bones[leg_parent.name]
+        leg_socket_posebone = pose_bones[self.leg_socket[side].name]
+        leg_parent_posebone = pose_bones[self.leg_parent[side].name]
         
         copy_loc_constraint = leg_parent_posebone.constraints.new(type='COPY_LOCATION')
         copy_loc_constraint.target = armature
@@ -168,15 +173,6 @@ class VRigify:
         copy_trns_constraint = leg_parent_posebone.constraints.new(type='COPY_TRANSFORMS')
         copy_trns_constraint.target = armature
         copy_trns_constraint.subtarget = leg_socket_posebone.name
-        
-        # Make deform chain copy FK chain's rotations
-        upper_leg_posebone = pose_bones[upper_leg_editbone.name]
-        original_upper_leg_posebone = pose_bones[upper_leg_bone.name]
-        Utilities.make_copy_rot_constraint(armature, original_upper_leg_posebone, upper_leg_posebone)
-        
-        lower_leg_posebone = pose_bones[lower_leg_editbone.name]
-        original_lower_leg_posebone = pose_bones[lower_leg_bone.name]
-        Utilities.make_copy_rot_constraint(armature, original_lower_leg_posebone, lower_leg_posebone)
         
         # Setup driver
         trns_driver = copy_trns_constraint.driver_add('influence')
@@ -189,20 +185,38 @@ class VRigify:
         target.data_path = '["isolate_rotation"]'
         trns_driver.driver.expression = var.name
         
-    def add_leg_ik_mechanism(armature, side_string):
+        return
+    
+        # FK
+        # Make deform chain copy FK chain's rotations
+        #upper_leg_posebone = pose_bones[upper_leg_editbone.name]
+        #upper_leg_posebone = pose_bones[self.base_upper_leg_editbones[side].name]
+        base_upper_leg_posebone = pose_bones[self.base_upper_leg_editbones[side].name]
+        Utilities.make_copy_rot_constraint(armature, base_upper_leg_posebone, upper_leg_posebone)
+        
+        lower_leg_posebone = pose_bones[lower_leg_editbone.name]
+        base_lower_leg_posebone = pose_bones[self.base_lower_leg_editbones[side].name]
+        Utilities.make_copy_rot_constraint(armature, base_lower_leg_posebone, lower_leg_posebone)
+        
+        # END OF FK
+        
+        
+        
+    def add_leg_fk_mechanism(self, side):
         None
         
-    def add_leg_socket_mechanism(armature, side_string):
+    def add_leg_ik_mechanism(self, side):
         None
+        
     
 if __name__ == '__main__':
     Utilities.reset()
     armature = bpy.context.active_object
     try:
         vrig = VRigify(armature)
-        vrig.add_heel_mechanism('L')
-        #add_heel_mechanism(armature, 'R')
-        #add_leg_mechanism(armature, 'L')
+        #vrig.add_heel_mechanism('L')
+        #vrig.add_heel_mechanism('R')
+        vrig.add_leg_socket_mechanism('L')
     except:
         Utilities.reset()
         a = 1/0
