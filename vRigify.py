@@ -55,10 +55,10 @@ class Utilities:
                     edit_bones[name + side_string].select = True
         bpy.ops.armature.delete()
 
-class BonePair:
-        def __init__(self, left_bone, right_bone):
-            self.l = left_bone
-            self.r = right_bone
+class Pair:
+        def __init__(self, left_item=None, right_item=None):
+            self.l = left_item
+            self.r = right_item
             
         def __getitem__(self, key):
             assert(key == 'L' or key =='R')
@@ -67,22 +67,29 @@ class BonePair:
             else:
                 return self.r
             
+        def __setitem__(self, key, value):
+            assert(key == 'L' or key =='R')
+            if key == 'L':
+                self.l = value
+            else:
+                self.r = value
+            
 class VRigify:
     def __init__(self, armature):
         self.armature = armature
         #self.base_original_upper_leg_editbone = 
         #self.base_original_lower_leg_editbone = 
         
-        self.base_foot_editbone = BonePair(edit_bones['J_Bip_L_Foot'], edit_bones['J_Bip_R_Foot'])
-        self.base_toe_editbone = BonePair(edit_bones['J_Bip_L_ToeBase'], edit_bones['J_Bip_R_ToeBase'])
+        self.base_foot_editbones = Pair(edit_bones['J_Bip_L_Foot'], edit_bones['J_Bip_R_Foot'])
+        self.base_toe_editbones = Pair(edit_bones['J_Bip_L_ToeBase'], edit_bones['J_Bip_R_ToeBase'])
         
     def add_heel_mechanism(self, side_string):
         bpy.ops.object.mode_set(mode='EDIT')
         
         ## Create new bones
         heel_base_editbone = armature.data.edit_bones.new(name='MCH_HeelBase_' + side_string)
-        heel_base_editbone.tail = Vector((self.base_foot_editbone[side_string].tail.x, 0.1, 0.0))
-        heel_base_editbone.head = Vector((self.base_foot_editbone[side_string].tail.x,  -0.1, 0.0))
+        heel_base_editbone.tail = Vector((self.base_foot_editbones[side_string].tail.x, 0.1, 0.0))
+        heel_base_editbone.head = Vector((self.base_foot_editbones[side_string].tail.x,  -0.1, 0.0))
         
         heel_back_editbone = armature.data.edit_bones.new(name='MCH_HeelBack_' + side_string)
         heel_back_editbone.head = heel_base_editbone.tail
@@ -94,16 +101,15 @@ class VRigify:
         control_bone.tail = control_bone.head + Vector((0, 0, 0.05))
         
         foot_root = armature.data.edit_bones.new("MCH_FootRoot_" + side_string)
-        foot_root.head = self.base_foot_editbone[side_string].head
-        foot_root.tail = self.base_foot_editbone[side_string].head + Vector((0, -0.1, 0))
+        foot_root.head = self.base_foot_editbones[side_string].head
+        foot_root.tail = self.base_foot_editbones[side_string].head + Vector((0, -0.1, 0))
         
         ## Assign parents
-        self.base_foot_editbone[side_string].parent = heel_base_editbone
-        self.base_toe_editbone[side_string].parent = heel_back_editbone
-        self.base_foot_editbone[side_string].parent = foot_root
+        self.base_foot_editbones[side_string].parent = heel_base_editbone
+        self.base_toe_editbones[side_string].parent = heel_back_editbone
         control_bone.parent = foot_root
         heel_back_editbone.parent = foot_root
-        heel_base_editbone.parent = foot_root
+        heel_base_editbone.parent = heel_back_editbone
         
         ## Create constraints
         bpy.ops.object.mode_set(mode='POSE')
@@ -121,9 +127,6 @@ class VRigify:
         limit_rot_constraint.use_limit_x = True
         limit_rot_constraint.owner_space = 'LOCAL'
         limit_rot_constraint.min_x = -3.14
-        
-        bpy.ops.object.mode_set(mode='EDIT')
-        self.base_foot_editbone[side_string].parent = heel_base_editbone
         
 
     def add_leg_fk_mechanism(armature, side_string):
