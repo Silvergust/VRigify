@@ -4,16 +4,6 @@ from mathutils import (
 Vector
 )
 
-skeleton_object = bpy.context.active_object
-armature = bpy.data.armatures['Armature']
-
-
-edit_bones = bpy.context.active_object.data.edit_bones
-#pose_bones = bpy.context.active_object.data.bones
-#pose_bones = bpy.context.pose_object.pose.bones
-pose_bones = bpy.context.active_object.pose.bones
-bpy.ops.object.mode_set(mode='EDIT')
-
 center_bone_names = []
 side_bone_names = [ "MCH_HeelBase_",
                     "MCH_HeelBack_",
@@ -40,21 +30,6 @@ class Utilities:
         new_bone.head = original_bone.head
         new_bone.tail = original_bone.head + (original_bone.tail - original_bone.head)*length_factor
 
-    def reset(side_string=None):
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.armature.select_all(action='DESELECT')
-        if side_string==None:
-            Utilities.reset('L')
-            Utilities.reset('R')
-            for name in center_bone_names:
-                if name in edit_bones.keys():
-                    edit_bones[name].select = True
-        else:
-            for name in side_bone_names:
-                if name + side_string in edit_bones.keys():
-                    edit_bones[name + side_string].select = True
-        bpy.ops.armature.delete()
-
 class Pair:
         def __init__(self, left_item=None, right_item=None):
             self.l = left_item
@@ -75,19 +50,42 @@ class Pair:
                 self.r = value
             
 class VRigify:
-    def __init__(self, armature):
-        self.armature = armature
+    def __init__(self, armature_object):
+        self.armature = armature_object
+        self.leg_parent = Pair()
+        self.leg_socket = Pair()
+        
+        
+    def detect_base_leg_bones(self):
+        bpy.ops.object.mode_set(mode='EDIT')
+        edit_bones = self.armature.data.edit_bones
         self.base_upper_leg_editbones = Pair(edit_bones["J_Bip_L_UpperLeg"], edit_bones["J_Bip_R_UpperLeg"])
         self.base_lower_leg_editbones = Pair(edit_bones["J_Bip_L_LowerLeg"], edit_bones["J_Bip_R_LowerLeg"])
         
         self.base_foot_editbones = Pair(edit_bones['J_Bip_L_Foot'], edit_bones['J_Bip_R_Foot'])
         self.base_toe_editbones = Pair(edit_bones['J_Bip_L_ToeBase'], edit_bones['J_Bip_R_ToeBase'])
         
-        self.leg_parent = Pair()
-        self.leg_socket = Pair()
+    
+    def reset(self, side_string=None):
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.armature.select_all(action='DESELECT')
+        edit_bones = self.armature.data.edit_bones
+        if side_string==None:
+            self.reset('L')
+            self.reset('R')
+            for name in center_bone_names:
+                if name in edit_bones.keys():
+                    edit_bones[name].select = True
+        else:
+            for name in side_bone_names:
+                if name + side_string in edit_bones:
+                    edit_bones[name + side_string].select = True
+        bpy.ops.armature.delete()
+        
         
     def add_heel_mechanism(self, side_string):
         bpy.ops.object.mode_set(mode='EDIT')
+        self.detect_base_leg_bones()
         
         ## Create new bones
         heel_base_editbone = armature.data.edit_bones.new(name='MCH_HeelBase_' + side_string)
@@ -116,6 +114,8 @@ class VRigify:
         
         ## Create constraints
         bpy.ops.object.mode_set(mode='POSE')
+        pose_bones = self.armature.pose.bones
+        
         heel_base_posebone = pose_bones[heel_base_editbone.name]
         heel_back_posebone = pose_bones[heel_back_editbone.name]
         Utilities.make_copy_rot_constraint(armature, heel_base_posebone, control_bone, 'LOCAL')
@@ -134,89 +134,91 @@ class VRigify:
 
     def add_leg_socket_mechanism(self, side):
         bpy.ops.object.mode_set(mode='EDIT')
+        self.detect_base_leg_bones()
         
-        #upper_leg_bone = edit_bones["J_Bip_" + side_string + "_UpperLeg"]
-        #lower_leg_bone = edit_bones["J_Bip_" + side_string + "_LowerLeg"]
-        foot_bone = edit_bones["J_Bip_" + side + "_Foot"]
+        edit_bones = self.armature.data.edit_bones
         hips_bone = edit_bones["J_Bip_C_Hips"]
         
-        #upper_leg_editbone = armature.data.edit_bones.new("MCH_UpperLeg_FK_" + side_string)
-        #upper_leg_editbone.head = self.base_upper_leg_editbones[side].head
-        #upper_leg_editbone.tail = self.base_lower_leg_editbones.head
+        leg_parent = self.leg_parent[side]
+        leg_parent = armature.data.edit_bones.new('MCH_LegParent_' + side)
+        leg_parent.head = self.base_upper_leg_editbones[side].head
+        leg_parent.tail = self.base_upper_leg_editbones[side].head + Vector((0, -0.1, 0))
         
-        #lower_leg_editbone = armature.data.edit_bones.new("MCH_LowerLeg_FK_" + side_string)
-        #lower_leg_editbone.head = lower_leg_bone.head
-        #lower_leg_editbone.tail = foot_bone.head
+        leg_socket = self.leg_socket[side]
+        leg_socket = armature.data.edit_bones.new('MCH_LegSocket_' + side)
+        leg_socket.head = self.base_upper_leg_editbones[side].head
+        leg_socket.tail = self.base_upper_leg_editbones[side].head + Vector((0, -0.05, 0))
         
-        self.leg_parent[side] = armature.data.edit_bones.new('MCH_LegParent_' + side)
-        self.leg_parent[side].head = self.base_upper_leg_editbones[side].head
-        self.leg_parent[side].tail = self.base_upper_leg_editbones[side].head + Vector((0, -0.1, 0))
-        
-        self.leg_socket[side] = armature.data.edit_bones.new('MCH_LegSocket_' + side)
-        self.leg_socket[side].head = self.base_upper_leg_editbones[side].head
-        self.leg_socket[side].tail = self.base_upper_leg_editbones[side].head + Vector((0, -0.05, 0))
-        
-        self.leg_socket[side].parent = hips_bone
-        #upper_leg_editbone.parent = self.leg_parent[side]
-        #lower_leg_editbone.parent = upper_leg_editbone
-        self.base_upper_leg_editbones[side].parent = self.leg_parent[side]
+        leg_socket.parent = hips_bone
+        self.base_upper_leg_editbones[side].parent = leg_parent
         self.base_lower_leg_editbones[side].parent = self.base_upper_leg_editbones[side]
-         
+    
         bpy.ops.object.mode_set(mode='POSE')
-        leg_socket_posebone = pose_bones[self.leg_socket[side].name]
-        leg_parent_posebone = pose_bones[self.leg_parent[side].name]
+        pose_bones = self.armature.pose.bones
         
+        leg_socket_posebone = pose_bones[leg_socket.name]
+        leg_parent_posebone = pose_bones[leg_parent.name]
+    
         copy_loc_constraint = leg_parent_posebone.constraints.new(type='COPY_LOCATION')
         copy_loc_constraint.target = armature
         copy_loc_constraint.subtarget = leg_socket_posebone.name
-        
+    
         copy_trns_constraint = leg_parent_posebone.constraints.new(type='COPY_TRANSFORMS')
         copy_trns_constraint.target = armature
         copy_trns_constraint.subtarget = leg_socket_posebone.name
-        
+    
         # Setup driver
         trns_driver = copy_trns_constraint.driver_add('influence')
         var = trns_driver.driver.variables.new()
         var.type = 'SINGLE_PROP'
         target = var.targets[0]
         target.id_type = 'OBJECT'
-        target.id = skeleton_object
+        target.id = self.armature
         armature['isolate_rotation'] = 0.0
         target.data_path = '["isolate_rotation"]'
         trns_driver.driver.expression = var.name
-        
-        return
     
-        # FK
         # Make deform chain copy FK chain's rotations
         #upper_leg_posebone = pose_bones[upper_leg_editbone.name]
-        #upper_leg_posebone = pose_bones[self.base_upper_leg_editbones[side].name]
+        #upper_leg_posebone = pose_bones[self.base_upper_leg_editbones[side].name
+        
+    def add_leg_fk_mechanism(self, side):
+        bpy.ops.object.mode_set(mode='EDIT')
+        self.detect_base_leg_bones()
+        upper_leg_editbone = armature.data.edit_bones.new("MCH_UpperLeg_FK_" + side)
+        upper_leg_editbone.head = self.base_upper_leg_editbones[side].head
+        upper_leg_editbone.tail = self.base_lower_leg_editbones[side].head
+        
+        lower_leg_editbone = armature.data.edit_bones.new("MCH_LowerLeg_FK_" + side)
+        lower_leg_editbone.head = self.base_lower_leg_editbones[side].head
+        lower_leg_editbone.tail = self.base_foot_editbones[side].head
+        
+        lower_leg_editbone.parent = upper_leg_editbone
+        
+        bpy.ops.object.mode_set(mode='POSE')
+        self.detect_base_leg_bones()
+        pose_bones = self.armature.pose.bones
+        
         base_upper_leg_posebone = pose_bones[self.base_upper_leg_editbones[side].name]
-        Utilities.make_copy_rot_constraint(armature, base_upper_leg_posebone, upper_leg_posebone)
+        Utilities.make_copy_rot_constraint(armature, base_upper_leg_posebone, pose_bones[upper_leg_editbone.name])
         
         lower_leg_posebone = pose_bones[lower_leg_editbone.name]
         base_lower_leg_posebone = pose_bones[self.base_lower_leg_editbones[side].name]
-        Utilities.make_copy_rot_constraint(armature, base_lower_leg_posebone, lower_leg_posebone)
-        
-        # END OF FK
-        
-        
-        
-    def add_leg_fk_mechanism(self, side):
-        None
+        Utilities.make_copy_rot_constraint(armature, base_lower_leg_posebone, pose_bones[lower_leg_editbone.name])
         
     def add_leg_ik_mechanism(self, side):
         None
         
     
 if __name__ == '__main__':
-    Utilities.reset()
     armature = bpy.context.active_object
     try:
         vrig = VRigify(armature)
-        #vrig.add_heel_mechanism('L')
-        #vrig.add_heel_mechanism('R')
+        vrig.reset()
+        vrig.add_heel_mechanism('L')
         vrig.add_leg_socket_mechanism('L')
+        vrig.add_leg_fk_mechanism('L')
+        print(vrig.base_foot_editbones['L'])
     except:
-        Utilities.reset()
+        vrig.reset()
         a = 1/0
