@@ -5,19 +5,21 @@ Vector
 )
 
 center_bone_names = []
-side_bone_names = [ "MCH_HeelBase_",
-                    "MCH_HeelBack_",
-                    "CTRL_Heel_",
-                    "MCH_FootRoot_",
+side_bone_names = [ "MCH_LegParent_",
+                    "MCH_LegSocket_",
                     "MCH_UpperLeg_FK_",
                     "MCH_LowerLeg_FK_",
                     "MCH_Foot_FK_",
                     "MCH_UpperLeg_IK_",
                     "MCH_LowerLeg_IK_",
-                    "MCH_Foot_IK_",
                     "CTRL_KneeTarget_",
-                    "MCH_LegParent_",
-                    "MCH_LegSocket_",
+                    "MCH_Foot_IK_",
+                    "MCH_HeelBase_",
+                    "MCH_HeelBack_",
+                    "CTRL_Heel_",
+                    "MCH_FootRoot_",
+                    "MCH_ArmParent_",
+                    "MCH_ArmSocket_",
                     "CTRL_Palm_",
                     "CTRL_Fingers_"]
 
@@ -73,9 +75,14 @@ class VRigify:
         self.lower_leg_fk_names = Pair()
         self.foot_fk_names = Pair()
         
+        self.arm_parent_names = Pair()
+        self.arm_socket_names = Pair()
+        self.elbow_target_names = Pair()
+        
         self.upper_leg_ik_names = Pair()
         self.lower_leg_ik_names = Pair()
         self.foot_ik_names = Pair()
+        
         
     def detect_base_leg_bones(self):
         print(self.armature)
@@ -88,10 +95,14 @@ class VRigify:
         self.base_foot_editbones = Pair(edit_bones['J_Bip_L_Foot'], edit_bones['J_Bip_R_Foot'])
         self.base_toe_editbones = Pair(edit_bones['J_Bip_L_ToeBase'], edit_bones['J_Bip_R_ToeBase'])
         
+        
     def detect_base_arm_bones(self):
         bpy.ops.object.mode_set(mode='EDIT')
         edit_bones = self.armature.data.edit_bones
+        self.base_upper_arm_editbones = Pair(edit_bones["J_Bip_L_UpperArm"], edit_bones["J_Bip_R_UpperArm"])
+        self.base_lower_arm_editbones = Pair(edit_bones["J_Bip_L_LowerArm"], edit_bones["J_Bip_R_LowerArm"])
         self.base_hand_editbones = Pair(edit_bones["J_Bip_L_Hand"], edit_bones["J_Bip_R_Hand"])
+    
     
     def reset(self, side_string=None):
         bpy.ops.object.mode_set(mode='EDIT')
@@ -162,23 +173,23 @@ class VRigify:
     '''Creates the socket mechanism to a limb chain and returns the name of the resulting parent and socket bones.
     outer_bone: Bone that lies outside the chain, e.g. hips our shoulder bones
     parent_name: Name of the parent bone to add (sans the side suffix).
-    socket_name: Name of the socket bone to add (sans the side suffix).'''
-    def add_socket_mechanism(self, side, outer_bone, parent_name, socket_name, first_link, second_link):
+    socket_name: Name of the socket bone to add (sans the side suffix).
+    prop_name: Name of the custom property to add to the armature object (sans the side suffix)'''
+    def add_socket_mechanism(self, side, outer_bone, parent_name, socket_name, first_link, prop_name=None):
         bpy.ops.object.mode_set(mode='EDIT')
         
         edit_bones = self.armature.data.edit_bones
         
         parent = armature.data.edit_bones.new(parent_name + side)
-        parent.head = self.base_upper_leg_editbones[side].head
+        parent.head = first_link.head
         parent.tail = parent.head + Vector((0, -0.1, 0))
         
         socket = armature.data.edit_bones.new(socket_name + side)
-        socket.head = self.base_upper_leg_editbones[side].head
+        socket.head = first_link.head
         socket.tail = socket .head+ Vector((0, -0.05, 0))
         
         socket.parent = outer_bone
         first_link.parent = parent
-        second_link.parent = first_link
     
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
@@ -194,21 +205,34 @@ class VRigify:
         copy_trns_constraint.target = armature
         copy_trns_constraint.subtarget = socket_posebone.name
     
-        self.assign_influence_driver(copy_trns_constraint, "follow_socket_rotation")
+        if prop_name == None:
+            prop_name = parent_name + "_influence_"
+        self.assign_influence_driver(copy_trns_constraint, prop_name + side)
         
         return parent.name, socket.name
 
 
     def add_leg_socket_mechanism(self, side):
         bpy.ops.object.mode_set(mode='EDIT')
+        self.detect_base_leg_bones()
         hips_bone = self.armature.data.edit_bones["J_Bip_C_Hips"]
         upper_bone = self.base_upper_leg_editbones[side]
-        lower_bone = self.base_lower_leg_editbones[side]
-        names = self.add_socket_mechanism(side, hips_bone, "MCH_Parent_", "MCH_Socket_", upper_bone, lower_bone)
+        names = self.add_socket_mechanism(side, hips_bone, "MCH_LegParent_", "MCH_LegSocket_", upper_bone, "leg_follows_hip_")
         self.leg_parent_names[side] = names[0]
         self.leg_socket_names[side] = names[1]
         return names
     
+    
+    def add_arm_socket_mechanism(self, side):
+        bpy.ops.object.mode_set(mode='EDIT')
+        self.detect_base_arm_bones()
+        shoulder_bone = self.armature.data.edit_bones["J_Bip_" + side + "_Shoulder"]
+        upper_bone = self.base_upper_arm_editbones[side]
+        names = self.add_socket_mechanism(side, shoulder_bone, "MCH_ArmParent_", "MCH_ArmSocket_", upper_bone, "arm_follows_shoulder_")
+        self.arm_parent_names[side] = names[0]
+        self.arm_socket_names[side] = names[1]
+        return names
+        
         
     def assign_influence_driver(self, constraint, prop_name):
         driver = constraint.driver_add('influence')
@@ -290,7 +314,7 @@ class VRigify:
         ik_constraint.chain_count = 2
         
         
-    def setup_leg_mechanism(self, side):
+    def setup_leg_fkik_mechanism(self, side):
         bpy.ops.object.mode_set(mode='EDIT')
         self.detect_base_leg_bones()
         pose_bones = self.armature.pose.bones
@@ -302,11 +326,12 @@ class VRigify:
         
         #Set base bones to copy IK chain rotations, and create drivers to control their influence  
         constraint = Utilities.make_copy_rot_constraint(self.armature, pose_bones[self.base_upper_leg_editbones[side].name], pose_bones[self.upper_leg_ik_names[side]])
-        self.assign_influence_driver(constraint, 'fk_ik')
+        self.assign_influence_driver(constraint, 'leg_fk_ik_' + side)
         constraint = Utilities.make_copy_rot_constraint(self.armature, pose_bones[self.base_lower_leg_editbones[side].name], pose_bones[self.lower_leg_ik_names[side]])
-        self.assign_influence_driver(constraint, 'fk_ik')
+        self.assign_influence_driver(constraint, 'leg_fk_ik_' + side)
         constraint = Utilities.make_copy_rot_constraint(self.armature, pose_bones[self.base_foot_editbones[side].name], pose_bones[self.foot_ik_names[side]])
-        self.assign_influence_driver(constraint, 'fk_ik')
+        self.assign_influence_driver(constraint, 'leg_fk_ik_' + side)
+        
         
     def add_palm_rig(self, side):
         self.detect_base_arm_bones()
@@ -328,6 +353,18 @@ class VRigify:
         edit_bones["J_Bip_" + side + "_Little1"].parent = palm_editbone
         #Create finger bones on palm
         
+    def setup_leg_rig(self, side=None):
+        if side == None:
+            self.setup_leg_rig('L')
+            self.setup_leg_rig('R')
+        else:
+            self.add_heel_mechanism(side)
+            self.add_leg_socket_mechanism(side)
+            self.add_leg_fk_chain(side)
+            self.add_leg_ik_chain(side)
+            self.setup_leg_fkik_mechanism(side)
+            
+        
 if __name__ == '__main__':
     armature = bpy.context.active_object
     print("\n\n\n ########## \n\n\n")
@@ -335,12 +372,17 @@ if __name__ == '__main__':
         vrig = VRigify(armature)
         vrig.reset()
         
-        vrig.add_heel_mechanism('L')
-        vrig.add_leg_socket_mechanism('L')
-        vrig.add_leg_fk_chain('L')
-        vrig.add_leg_ik_chain('L')
-        vrig.setup_leg_mechanism('L')
-        vrig.add_palm_rig('L')
+        #vrig.add_heel_mechanism('L')
+        #vrig.add_leg_socket_mechanism('L')
+        #vrig.add_leg_fk_chain('L')
+        #vrig.add_leg_ik_chain('L')
+        #vrig.setup_leg_fkik_mechanism('L')
+        
+        vrig.setup_leg_rig()
+        
+        #vrig.add_palm_rig('L')
+        #vrig.add_arm_socket_mechanism('L')
+        #vrig.add_arm_socket_mechanism('R')
     except:
         vrig.reset()
         a = 1/0
