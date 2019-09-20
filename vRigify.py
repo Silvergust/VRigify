@@ -21,7 +21,13 @@ side_bone_names = [ "MCH_LegParent_",
                     "MCH_ArmParent_",
                     "MCH_ArmSocket_",
                     "CTRL_Palm_",
-                    "CTRL_Fingers_"]
+                    "CTRL_Fingers_",
+                    "CTRL_Fingertips_",
+                    "MCH_Little0_",
+                    "MCH_Ring0_",
+                    "MCH_Middle0_",
+                    "MCH_Index0_",
+                    "MCH_Thumb0_"]
 
 class Utilities:
     def make_copy_constraint(armature, owner_bone, target_bone, type, space='WORLD'): #I'd love to not have armature as argument and find it from owner_bone instead
@@ -423,44 +429,74 @@ class VRigify:
         palm_editbone.head = self.base_hand_editbones[side].head + Vector((0, 0, 0.05))
         palm_editbone.tail = palm_editbone.head + Vector((0.06 * (1 if side == 'L' else -1), 0, 0))
         #palm_editbone.parent = self.base_hand_editbones[side]
-        palm_editbone.roll = 3.14159 / 4 # Assuming right hand side (most likely wrong for left hand). Non-magic numbers may be preferable
+        palm_editbone.roll = -3.14159 / 2 # Assuming right hand side (most likely wrong for left hand). Non-magic numbers may be preferable
         palm_editbone.parent = self.base_hand_editbones[side] # Will almost certainly need to change
         
         fingers_editbone = edit_bones.new("CTRL_Fingers_" + side)
         fingers_editbone.head = palm_editbone.tail
         fingers_editbone.tail = fingers_editbone.head + Vector((0.03 * (1 if side == 'L' else -1), 0, 0))
-        #fingers_editbone.parent = palm_editbone
+        fingers_editbone.parent = palm_editbone
         
         fingertips_editbone = edit_bones.new("CTRL_Fingertips_" + side)
-        fingertips_editbone.head = fingers_editbone.head
+        fingertips_editbone.head = fingers_editbone.tail
         fingertips_editbone.tail = fingertips_editbone.head + Vector((0.015 * (1 if side == 'L' else -1), 0, 0))        
+        fingertips_editbone.parent = fingers_editbone
         
-        #bpy.ops.object.mode_set(mode='POSE')
-        #pose_bones = self.armature.pose.bones
-        #little1_posebone = pose_bones[little1_editbone.name]
-        #little1_posebone.constraints.new(type='
-        
-        little1_editbone = edit_bones["J_Bip_" + side + "_Little1"]
-        
-        # Create auxiliary "zeroth" finger bones between wrist and "finger" fingerbones
-        little0_editbone = edit_bones.new("MCH_Little0_" + side)
-        little0_editbone.head = self.base_hand_editbones[side].head
-        little0_editbone.tail = little1_editbone.head
-        little0_editbone.parent = self.base_lower_arm_editbones[side]
-        little1_editbone.parent = little0_editbone
+        little_fingers = self.add_finger_chain(side, "Little", palm_editbone, fingers_editbone, fingertips_editbone)
+        ring_fingers = self.add_finger_chain(side, "Ring", palm_editbone, fingers_editbone, fingertips_editbone)
+        middle_fingers = self.add_finger_chain(side, "Middle", palm_editbone, fingers_editbone, fingertips_editbone)
+        index_fingers = self.add_finger_chain(side, "Index", palm_editbone, fingers_editbone, fingertips_editbone)
+        #thumb_fingers = self.add_finger_chain(side, "Thumb", palm_editbone, fingers_editbone, fingertips_editbone)
         
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
         palm_posebone = pose_bones[palm_editbone.name]
-        little0_posebone = pose_bones[little0_editbone.name]
-        Utilities.make_copy_rot_constraint(self.armature, little0_posebone, palm_editbone, 'LOCAL')
+        fingers_posebone = pose_bones[fingers_editbone.name]
+        fingertips_posebone = pose_bones[fingertips_editbone.name]
+        def set_finger_chain_constraints(finger_list, influence):
+            finger0_posebone = pose_bones[finger_list[0].name]
+            finger1_posebone = pose_bones[finger_list[1].name]
+            finger2_posebone = pose_bones[finger_list[2].name]
+            #Utilities.make_copy_rot_constraint(self.armature, finger0_posebone, palm_posebone, 'LOCAL')
+            Utilities.make_copy_rot_constraint(self.armature, finger1_posebone, fingers_posebone, 'LOCAL').influence
+            Utilities.make_copy_rot_constraint(self.armature, finger2_posebone, fingertips_posebone, 'LOCAL').influence
+            
+        set_finger_chain_constraints(little_fingers, 1.0)
+        set_finger_chain_constraints(ring_fingers, 0.9)
+        set_finger_chain_constraints(middle_fingers, 0.8)
+        set_finger_chain_constraints(index_fingers, 0.5)
+        #set_finger_chain_constraints(thumb_fingers, 1.0)
         
-        #assign_influence_driver(
-        #edit_bones["J_Bip_" + side + "_Little1"].parent = palm_editbone
-        #edit_bones["J_Bip_" + side + "_Ring1"].parent = palm_editbone
-        #edit_bones["J_Bip_" + side + "_Little1"].parent = palm_editbone
-        #edit_bones["J_Bip_" + side + "_Little1"].parent = palm_editbone
         
+    def add_finger_chain(self, side, finger_suffix, palm_editbone, fingers_editbone, fingertips_editbone):
+        bpy.ops.object.mode_set(mode='EDIT')
+        edit_bones = self.armature.data.edit_bones
+        finger1_editbone = edit_bones["J_Bip_" + side + "_" + finger_suffix + "1"]
+        finger2_editbone = edit_bones["J_Bip_" + side + "_" + finger_suffix + "2"]
+        
+        # Create auxiliary "zeroth" finger bones between wrist and "finger" fingerbones
+        finger0_editbone = edit_bones.new("MCH_" + finger_suffix + "0_" + side)
+        finger0_editbone.head = self.base_hand_editbones[side].head
+        finger0_editbone.tail = finger1_editbone.head
+        finger0_editbone.parent = self.base_lower_arm_editbones[side]
+        finger0_editbone.roll = finger1_editbone.roll
+        finger1_editbone.parent = finger0_editbone
+        
+        return [finger0_editbone, finger1_editbone, finger2_editbone]
+        
+        #bpy.ops.object.mode_set(mode='POSE')
+        #pose_bones = self.armature.pose.bones
+        #palm_posebone = pose_bones[palm_editbone.name]
+        #fingers_posebone = pose_bones[fingers_editbone.name]
+        #fingertips_posebone = pose_bones[fingertips_editbone.name]
+        #finger0_posebone = pose_bones[finger0_editbone.name]
+        #finger1_posebone = pose_bones[finger1_editbone.name]
+        #finger2_posebone = pose_bones[finger2_editbone.name]
+        
+        #Utilities.make_copy_rot_constraint(self.armature, finger0_posebone, palm_editbone, 'LOCAL')
+        #Utilities.make_copy_rot_constraint(self.armature, finger1_posebone, fingers_posebone, 'LOCAL')
+        #Utilities.make_copy_rot_constraint(self.armature, finger2_posebone, fingertips_posebone, 'LOCAL')
+
         
     def setup_leg_rig(self, side=None):
         if side == None:
