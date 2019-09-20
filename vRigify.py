@@ -282,8 +282,6 @@ class VRigify:
         lower_leg_editbone.roll = self.base_lower_leg_editbones[side].roll
         
         foot_editbone = edit_bones.new("MCH_Foot" + suffix + "_" + side)
-        #foot_editbone.head = lower_leg_editbone.tail
-        #foot_editbone.tail = lower_leg_editbone.tail + Vector((0, 0, -0.15))
         foot_editbone.head = self.base_foot_editbones[side].head
         foot_editbone.tail = self.base_foot_editbones[side].tail
         foot_editbone.roll = self.base_foot_editbones[side].roll
@@ -324,10 +322,8 @@ class VRigify:
         self.upper_leg_fk_names[side] = upper_leg_editbone.name
         self.lower_leg_fk_names[side] = lower_leg_editbone.name
         self.foot_fk_names[side] = foot_editbone.name
-        #edit_bones = self.armature.data.edit_bones   
         
         foot_editbone = self.armature.data.edit_bones["J_Bip_" + side + "_Foot"]
-        #foot_editbone.parent = lower_leg_editbone
         self.armature.data.edit_bones["J_Bip_" + side + "_ToeBase"].parent = foot_editbone
         
         
@@ -362,9 +358,7 @@ class VRigify:
     def add_leg_ik_chain(self, side):
         upper_leg_editbone, lower_leg_editbone, foot_editbone = self.create_leg_bones("_IK", side)
         edit_bones = self.armature.data.edit_bones
-        #foot_editbone.parent = edit_bones[self.rocker_names[side]]
         foot_editbone.parent = None
-        #print("BBBBB " + self.heel_names[side])
         edit_bones[self.heel_names[side]].parent = foot_editbone
         
         self.upper_leg_ik_names[side] = upper_leg_editbone.name
@@ -373,29 +367,6 @@ class VRigify:
         
         self.knee_target_names[side] = self.add_ik_chain(side, "CTRL_KneeTarget_", Vector((0, -1, 0)), upper_leg_editbone, lower_leg_editbone, foot_editbone)
    
-        #self.add_heel_mechanism(side, lower_leg_editbone, foot_editbone)
-        
-        
-    #def add_leg_ik_chain(self, side):
-        #upper_leg_editbone, lower_leg_editbone, foot_editbone = self.create_leg_bones("_IK", side)
-        #foot_editbone.parent = None
-        #self.upper_leg_ik_names[side] = upper_leg_editbone.name
-        #self.lower_leg_ik_names[side] = lower_leg_editbone.name
-        #self.foot_ik_names[side] = foot_editbone.name
-        
-        #edit_bones = self.armature.data.edit_bones
-        #knee_subtarget_editbone = edit_bones.new("CTRL_KneeTarget_" + side)
-        #knee_subtarget_editbone.head = lower_leg_editbone.head + Vector((0, -1, 0))
-        #knee_subtarget_editbone.tail = knee_subtarget_editbone.head + Vector((0, -0.2, 0))
-
-        #bpy.ops.object.mode_set(mode='POSE')
-        #pose_bones = self.armature.pose.bones   
-        
-        #foot_posebone = pose_bones[foot_editbone.name]
-        #lower_leg_posebone = pose_bones[lower_leg_editbone.name]
-        #knee_subtarget_posebone = pose_bones[knee_subtarget_editbone.name]
-        
-        #Utilities.make_ik_constraint(self.armature, lower_leg_posebone, foot_posebone, knee_subtarget_posebone)
         
         
     def setup_leg_fkik_mechanism(self, side):
@@ -428,7 +399,6 @@ class VRigify:
         palm_editbone = edit_bones.new("CTRL_Palm_" + side)
         palm_editbone.head = self.base_hand_editbones[side].head + Vector((0, 0, 0.05))
         palm_editbone.tail = palm_editbone.head + Vector((0.06 * (1 if side == 'L' else -1), 0, 0))
-        #palm_editbone.parent = self.base_hand_editbones[side]
         palm_editbone.roll = -3.14159 / 2 # Assuming right hand side (most likely wrong for left hand). Non-magic numbers may be preferable
         palm_editbone.parent = self.base_hand_editbones[side] # Will almost certainly need to change
         
@@ -446,7 +416,6 @@ class VRigify:
         ring_fingers = self.add_finger_chain(side, "Ring", palm_editbone, fingers_editbone, fingertips_editbone)
         middle_fingers = self.add_finger_chain(side, "Middle", palm_editbone, fingers_editbone, fingertips_editbone)
         index_fingers = self.add_finger_chain(side, "Index", palm_editbone, fingers_editbone, fingertips_editbone)
-        #thumb_fingers = self.add_finger_chain(side, "Thumb", palm_editbone, fingers_editbone, fingertips_editbone)
         
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
@@ -457,7 +426,6 @@ class VRigify:
             finger0_posebone = pose_bones[finger_list[0].name]
             finger1_posebone = pose_bones[finger_list[1].name]
             finger2_posebone = pose_bones[finger_list[2].name]
-            #Utilities.make_copy_rot_constraint(self.armature, finger0_posebone, palm_posebone, 'LOCAL')
             Utilities.make_copy_rot_constraint(self.armature, finger1_posebone, fingers_posebone, 'LOCAL').influence
             Utilities.make_copy_rot_constraint(self.armature, finger2_posebone, fingertips_posebone, 'LOCAL').influence
             
@@ -465,7 +433,6 @@ class VRigify:
         set_finger_chain_constraints(ring_fingers, 0.9)
         set_finger_chain_constraints(middle_fingers, 0.8)
         set_finger_chain_constraints(index_fingers, 0.5)
-        #set_finger_chain_constraints(thumb_fingers, 1.0)
         
         
     def add_finger_chain(self, side, finger_suffix, palm_editbone, fingers_editbone, fingertips_editbone):
@@ -483,19 +450,6 @@ class VRigify:
         finger1_editbone.parent = finger0_editbone
         
         return [finger0_editbone, finger1_editbone, finger2_editbone]
-        
-        #bpy.ops.object.mode_set(mode='POSE')
-        #pose_bones = self.armature.pose.bones
-        #palm_posebone = pose_bones[palm_editbone.name]
-        #fingers_posebone = pose_bones[fingers_editbone.name]
-        #fingertips_posebone = pose_bones[fingertips_editbone.name]
-        #finger0_posebone = pose_bones[finger0_editbone.name]
-        #finger1_posebone = pose_bones[finger1_editbone.name]
-        #finger2_posebone = pose_bones[finger2_editbone.name]
-        
-        #Utilities.make_copy_rot_constraint(self.armature, finger0_posebone, palm_editbone, 'LOCAL')
-        #Utilities.make_copy_rot_constraint(self.armature, finger1_posebone, fingers_posebone, 'LOCAL')
-        #Utilities.make_copy_rot_constraint(self.armature, finger2_posebone, fingertips_posebone, 'LOCAL')
 
         
     def setup_leg_rig(self, side=None):
