@@ -4,7 +4,13 @@ from mathutils import (
 Vector
 )
 
-center_bone_names = []
+center_bone_names = ["CTRL_Hips",
+                    "MCH_HipsParent",
+                    "MCH_SpineParent",
+                    "MCH_ChestParent",
+                    "MCH_UpperChestParent",
+                    "CTRL_Chest"]
+                    
 side_bone_names = [ "MCH_LegParent_",
                     "MCH_LegSocket_",
                     "MCH_UpperLeg_FK_",
@@ -45,8 +51,18 @@ class Utilities:
         constraint.owner_space = space
         return constraint
     
+    
     def make_copy_rot_constraint(armature, owner_bone, target_bone, space='WORLD'):
         return Utilities.make_copy_constraint(armature, owner_bone, target_bone, 'COPY_ROTATION', space)
+
+
+    def make_multi_copy_rot_constraints(armature, first_control_bone, second_control_bone, target_bones, space='WORLD'):
+        i = 0
+        for bone in target_bones:
+            Utilities.make_copy_rot_constraint(armature, bone, first_control_bone, space)
+            Utilities.make_copy_rot_constraint(armature, bone, second_control_bone, space).influence = i / (len(target_bones)-1)
+            i += 1
+
 
     def make_ik_constraint(armature, owner_posebone, extremity_posebone, pole_posebone, chain_count=2):
         constraint = owner_posebone.constraints.new(type='IK')
@@ -57,16 +73,19 @@ class Utilities:
         constraint.chain_count = chain_count
         return constraint
 
+
     def clone_bone(original_bone, clone_name, length_factor=1.0):
         new_bone = armature.data.edit_bones.new(name=clone_name)
         new_bone.head = original_bone.head
         new_bone.tail = original_bone.head + (original_bone.tail - original_bone.head)*length_factor
 
 
+
 class Pair:
         def __init__(self, left_item=None, right_item=None):
             self.l = left_item
             self.r = right_item
+            
             
         def __getitem__(self, key):
             assert(key == 'L' or key =='R')
@@ -75,12 +94,15 @@ class Pair:
             else:
                 return self.r
             
+            
         def __setitem__(self, key, value):
             assert(key == 'L' or key =='R')
             if key == 'L':
                 self.l = value
             else:
                 self.r = value
+            
+            
             
 class VRigify:
     def __init__(self, armature_object):
@@ -242,7 +264,7 @@ class VRigify:
         copy_trns_constraint.subtarget = socket_posebone.name
     
         if prop_name == None:
-            prop_name = parent_name + "_influence_"
+            prop_name = parent_name + "_influence" + ("" if side == "" else "_")
         self.assign_influence_driver(copy_trns_constraint, prop_name + side)
         
         return parent.name, socket.name
@@ -268,6 +290,14 @@ class VRigify:
         self.arm_parent_names[side] = names[0]
         self.arm_socket_names[side] = names[1]
         return names
+        
+        
+    def add_neck_socket_mechanism(self):
+        bpy.ops.object.mode_set(mode='EDIT')
+        upper_chest_bone = self.armature.data.edit_bones["J_Bip_C_UpperChest"]
+        neck_bone = self.armature.data.edit_bones["J_Bip_C_Neck"]
+        head_bone = self.armature.data.edit_bones["J_Bip_C_Head"]
+        self.add_socket_mechanism("", upper_chest_bone, "MCH_NeckParent", "MCH_NeckSocket", neck_bone, "neck_follows_chest")
         
         
     def assign_influence_driver(self, constraint, prop_name):
@@ -539,11 +569,103 @@ class VRigify:
             self.add_arm_ik_chain(side)
             self.setup_arm_fkik_mechanism(side)
             
+            
     def create_spine_bones(self):
         None
         
         
-    def creat_spine_parent_bones(self):
+    def setup_spine_bones(self):
+        edit_bones = self.armature.data.edit_bones
+        
+        hips_editbone = edit_bones["J_Bip_C_Hips"]
+        spine_editbone = edit_bones["J_Bip_C_Spine"]
+        chest_editbone = edit_bones["J_Bip_C_Chest"]
+        upper_chest_editbone = edit_bones["J_Bip_C_UpperChest"]
+        
+        offset = Vector((0, 0, 0.05))
+        hips_parent_editbone = edit_bones.new("MCH_HipsParent")
+        hips_parent_editbone.head = hips_editbone.head
+        hips_parent_editbone.tail = hips_parent_editbone.head + offset
+        hips_parent_editbone.roll = hips_editbone.roll
+        spine_parent_editbone = edit_bones.new("MCH_SpineParent")
+        spine_parent_editbone.head = spine_editbone.head
+        spine_parent_editbone.tail = spine_parent_editbone.head + offset
+        spine_parent_editbone.roll = spine_editbone.roll
+        chest_parent_editbone = edit_bones.new("MCH_ChestParent")
+        chest_parent_editbone.head = chest_editbone.head
+        chest_parent_editbone.tail = chest_parent_editbone.head + offset
+        chest_parent_editbone.roll = chest_editbone.roll
+        upper_chest_parent_editbone = edit_bones.new("MCH_UpperChestParent")
+        upper_chest_parent_editbone.head = upper_chest_editbone.head
+        upper_chest_parent_editbone.tail = upper_chest_parent_editbone.head + offset
+        upper_chest_parent_editbone.roll = upper_chest_editbone.roll
+        
+        spine_parent_editbone.parent = hips_editbone
+        spine_editbone.parent = spine_parent_editbone
+        chest_parent_editbone.parent = spine_editbone
+        chest_editbone.parent = chest_parent_editbone
+        upper_chest_parent_editbone.parent = chest_editbone
+        upper_chest_editbone.parent = upper_chest_parent_editbone
+        
+        return hips_parent_editbone, spine_parent_editbone, chest_parent_editbone, upper_chest_parent_editbone
+    
+    
+    def setup_spine_mechanism(self):
+        #bpy.ops.object.mode_set(mode='EDIT')
+        hips_parent_editbone, spine_parent_editbone, chest_parent_editbone, upper_chest_parent_editbone = self.setup_spine_bones()
+        
+        offset = Vector((0, 0, 0.03))
+        
+        edit_bones = self.armature.data.edit_bones
+        hips_control_editbone = edit_bones.new("CTRL_Hips")
+        hips_control_editbone.head = spine_parent_editbone.head
+        hips_control_editbone.tail = hips_control_editbone.head + offset
+        hips_control_editbone.roll = spine_parent_editbone.roll
+        
+        chest_control_editbone = edit_bones.new("CTRL_Chest")
+        chest_control_editbone.head = upper_chest_parent_editbone.tail
+        chest_control_editbone.tail = chest_control_editbone.head + offset
+        chest_control_editbone.roll = upper_chest_parent_editbone.roll
+        
+        #bpy.ops.object.mode_set(mode='EDIT')
+        
+        bpy.ops.object.mode_set(mode='POSE')
+        pose_bones = self.armature.pose.bones
+
+        hips_control_posebone = pose_bones[hips_control_editbone.name]
+        hips_parent_posebone = pose_bones[hips_parent_editbone.name]
+        spine_parent_posebone = pose_bones[spine_parent_editbone.name]
+        chest_parent_posebone = pose_bones[chest_parent_editbone.name]
+        upper_chest_parent_posebone = pose_bones[upper_chest_parent_editbone.name]
+        chest_control_posebone = pose_bones[chest_control_editbone.name]
+        
+        Utilities.make_multi_copy_rot_constraints(self.armature, hips_control_posebone, chest_control_posebone, [hips_parent_posebone, spine_parent_posebone, chest_parent_posebone, upper_chest_parent_posebone])
+        #spine_parent_posebone = pose_bones[spine_parent_editbone.name]
+        #spine_posebone = pose_bones[spine_editbone.name]
+        #chest_parent_posebone = pose_bones[chest_parent_editbone.name]
+        #chest_posebone = pose_bones[chest_editbone.name]
+        #upper_chest_parent_posebone = pose_bones[upper_chest_parent_editbone.name]
+        #upper_chest_posebone = pose_bones[upper_chest_editbone.name]
+        #Utilities.make_copy_rot_constraint(self.armature, spine_posebone, spine_parent_posebone)
+        #Utilities.make_copy_rot_constraint(self.armature, chest_posebone, chest_parent_posebone)#chest_parent_posebone, spine_posebone)
+        #Utilities.make_copy_rot_constraint(self.armature, upper_chest_posebone, upper_chest_parent_posebone)
+        
+    def setup_neck_mechanism(self):
+        edit_bones = self.armature.data.edit_bones
+        neck_editbone = edit_bones["J_Bip_C_Neck"]
+        head_editbone = edit_bones["J_Bip_C_Head"]
+        
+        offset = Vector((0, 0, 0.03))
+        neck_parent = edit_bones.new("MCH_Neck_Parent")
+        neck_parent.head = neck_editbone.head
+        neck_parent.tail = neck_parent.head + offset
+        neck_parent.roll = neck_editbone.roll
+        head_parent = edit_bones.new("MCH_Head_Parent")
+        head_parent.head = head_editbone.head
+        head_parent.tail = head_parent.head + offset
+        head_parent.roll = head_editbone.roll
+        
+        
         
 if __name__ == '__main__':
     armature = bpy.context.active_object
@@ -563,11 +685,15 @@ if __name__ == '__main__':
         
         #vrig.setup_leg_rig()
         
-        vrig.setup_leg_rig('L')
+        #vrig.setup_leg_rig('L')
         
         #vrig.setup_leg_rig('R')
         
-        vrig.setup_arm_rig('L')
+        #vrig.setup_arm_rig('L')
+        
+        vrig.add_neck_socket_mechanism()
+        
+        #vrig.setup_spine_mechanism()
         
         #vrig.add_palm_rig('L')
         #vrig.add_arm_socket_mechanism('L')
