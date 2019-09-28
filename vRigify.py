@@ -1,4 +1,5 @@
 import bpy
+import bpy_extras
 
 from mathutils import (
 Vector
@@ -153,8 +154,12 @@ class VRigify:
         self.neck_name = None
         self.neck_parent_name = None
         self.neck_socket_name = None
-        self.chest_name = None
-        self.hips_name = None
+        self.chest_control_name = None
+        self.hips_control_name = None
+        
+        self.hips_widget_mesh = None
+        self.leg_ik_widget_mesh = Pair()
+        self.arm_ik_widget_mesh = Pair()
         
         
     def detect_base_leg_bones(self):
@@ -681,7 +686,7 @@ class VRigify:
         upper_chest_parent_editbone.tail = upper_chest_parent_editbone.head + offset
         upper_chest_parent_editbone.roll = upper_chest_editbone.roll
         
-        spine_parent_editbone.parent = hips_editbone
+        #spine_parent_editbone.parent = hips_editbone
         spine_editbone.parent = spine_parent_editbone
         chest_parent_editbone.parent = spine_editbone
         chest_editbone.parent = chest_parent_editbone
@@ -702,14 +707,17 @@ class VRigify:
         hips_control_editbone.head = spine_parent_editbone.head
         hips_control_editbone.tail = hips_control_editbone.head + offset
         hips_control_editbone.roll = spine_parent_editbone.roll
-        self.hips_name = hips_control_editbone.name
+        self.hips_control_name = hips_control_editbone.name
+        edit_bones["J_Bip_C_Hips"].parent = hips_control_editbone
         
         chest_control_editbone = edit_bones.new("CTRL_Chest")
         #chest_control_editbone.layers[Layers.ctrl] = True
         chest_control_editbone.head = upper_chest_parent_editbone.tail
         chest_control_editbone.tail = chest_control_editbone.head + offset
         chest_control_editbone.roll = upper_chest_parent_editbone.roll
-        self.chest_name = chest_control_editbone.name
+        #chest_control_editbone.parent = chest_parent_editbone
+        self.chest_control_name = chest_control_editbone.name
+        #edit_bones["J_Bip_C_UpperChest"].parent = chest_control_editbone
         
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
@@ -720,6 +728,10 @@ class VRigify:
         chest_parent_posebone = pose_bones[chest_parent_editbone.name]
         upper_chest_parent_posebone = pose_bones[upper_chest_parent_editbone.name]
         chest_control_posebone = pose_bones[chest_control_editbone.name]
+        
+        spine_constraint = spine_parent_posebone.constraints.new(type='COPY_LOCATION')
+        spine_constraint.target = self.armature
+        spine_constraint.subtarget = hips_control_posebone.name
         
         Utilities.make_multi_copy_rot_constraints(self.armature, hips_control_posebone, chest_control_posebone, [hips_parent_posebone, spine_parent_posebone, chest_parent_posebone, upper_chest_parent_posebone])
         
@@ -763,29 +775,76 @@ class VRigify:
         global_editbone.head = self.armature.location
         global_editbone.tail = self.armature.location + Vector((0, 0, 0.1))
         #global_editbone.layers[Layers.ctrl] = True
-        edit_bones["J_Bip_C_Hips"].parent = global_editbone
+        edit_bones[self.hips_control_name].parent = global_editbone
         edit_bones[self.neck_name].parent = global_editbone
-        edit_bones[self.chest_name].parent = global_editbone
+        edit_bones[self.chest_control_name].parent = edit_bones[self.hips_control_name]
         for side in ['L', 'R']:
             edit_bones[self.knee_target_names[side]].parent = global_editbone
             edit_bones[self.elbow_target_names[side]].parent = global_editbone
             edit_bones[self.hand_ik_names[side]].parent = global_editbone
             edit_bones[self.foot_ik_names[side]].parent = global_editbone
+            
+        
+    def create_widget(self, name, editbone, verts, edges):
+        mesh = bpy.data.meshes.new(name=name)
+        
+                        
+        #cube_faces = [  (0, 1, 3, 2),
+        #                (0, 2, 6, 4),
+        #                (0, 1, 5, 4),
+        #                (1, 3, 7, 5),
+        #                (4, 5, 7, 6),
+        #                (2, 3, 7, 6) ]
+        mesh.from_pydata(verts, edges, [])#, cube_faces)
+        mesh.validate()
+    
+        bpy.ops.object.mode_set(mode='OBJECT')
+        self.armature.select = False
+        ob = bpy_extras.object_utils.object_data_add(bpy.context, mesh)
+        #ob.select = False
+        bpy.ops.object.select_all(action='DESELECT')
+        self.armature.select = True
+        bpy.context.view_layer.objects.active = self.armature
+        bpy.ops.object.mode_set(mode='POSE')
+        self.armature.pose.bones[editbone.name].custom_shape = ob
+        #ob.location = editbone.center
+        #ob.parent = self.armature
+        
+        
+    def create_cuboid_widget(self, name, editbone, half_sizes):
+        half_size_x, half_size_y, half_size_z = half_sizes
+        verts = [  (-half_size_x, -half_size_y, -half_size_z), ( half_size_x, -half_size_y, -half_size_z),
+                   (-half_size_x,  half_size_y, -half_size_z), ( half_size_x,  half_size_y, -half_size_z),
+                   (-half_size_x, -half_size_y,  half_size_z), ( half_size_x, -half_size_y,  half_size_z),
+                   (-half_size_x,  half_size_y,  half_size_z), ( half_size_x,  half_size_y,  half_size_z)]
+        edges = [  (0, 1), (1, 3), (3, 2), (2, 0),
+                    (1, 5), (5, 4), (4, 0),
+                    (2, 6), (6, 4), 
+                    (6, 7), (7, 5),
+                    (7, 3) ]
+        self.create_widget(name, editbone, verts, edges)
+        
+        
+    def create_cube_widget(self, name, editbone, half_size):
+        self.create_cuboid_widget(name, editbone, (half_size, half_size, half_size))
+        
+    
+    def create_hips_widget(self):
+        hips_editbone = self.armature.data.edit_bones["CTRL_Hips"]
+        leg_editbone = self.armature.data.edit_bones["J_Bip_L_UpperLeg"]
+        half_size = 1.5*(leg_editbone.center.x - hips_editbone.center.x)/(hips_editbone.tail - hips_editbone.head).magnitude
+        self.create_cube_widget("WGT_Hips", hips_editbone, half_size)
         
         
 if __name__ == '__main__':
     armature = bpy.context.active_object
     
-    try:
-        vrig = VRigify(armature)
-        vrig.reset()
-        vrig.normalize_base_leg_bone_rolls()
-        vrig.setup_leg_rig()
-        vrig.setup_arm_rig()
-        vrig.setup_spine_mechanism()
-        vrig.setup_neck_mechanism()
-        vrig.setup_global_control()
-        
-    except:
-        #vrig.reset()
-        a = 1/0
+    vrig = VRigify(armature)
+    vrig.reset()
+    vrig.normalize_base_leg_bone_rolls()
+    vrig.setup_leg_rig()
+    vrig.setup_arm_rig()
+    vrig.setup_spine_mechanism()
+    vrig.setup_neck_mechanism()
+    vrig.setup_global_control()
+    vrig.create_hips_widget()
