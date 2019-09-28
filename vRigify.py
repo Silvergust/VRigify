@@ -1,6 +1,12 @@
 import bpy
 import bpy_extras
 
+
+from math import(
+cos,
+sin
+)
+
 from mathutils import (
 Vector
 )
@@ -160,6 +166,8 @@ class VRigify:
         self.hips_widget_mesh = None
         self.leg_ik_widget_mesh = Pair()
         self.arm_ik_widget_mesh = Pair()
+        
+        self.cube_widget_object = None
         
         
     def detect_base_leg_bones(self):
@@ -825,6 +833,13 @@ class VRigify:
         self.create_widget(name, editbone, verts, edges)
         
         
+    def create_circle_widget(self, name, editbone, radius):
+        steps_amount = 24
+        circle_verts = [ (radius*cos(theta), 0, radius*sin(theta)) for theta in [2 * i * 3.14159/steps_amount for i in range(steps_amount)]]
+        circle_edges = [(i, (i+1)%len(circle_verts)) for i in range(len(circle_verts))]
+        self.create_widget(name, editbone, circle_verts, circle_edges)
+        
+        
     def create_cube_widget(self, name, editbone, half_size):
         self.create_cuboid_widget(name, editbone, (half_size, half_size, half_size))
         
@@ -834,6 +849,18 @@ class VRigify:
         leg_editbone = self.armature.data.edit_bones["J_Bip_L_UpperLeg"]
         half_size = 1.5*(leg_editbone.center.x - hips_editbone.center.x)/(hips_editbone.tail - hips_editbone.head).magnitude
         self.create_cube_widget("WGT_Hips", hips_editbone, half_size)
+        
+        
+    def create_chest_widget(self):
+        chest_editbone = self.armature.data.edit_bones["CTRL_Chest"]
+        shoulder_editbone = self.armature.data.edit_bones["J_Bip_L_Shoulder"]
+        radius = (chest_editbone.center - shoulder_editbone.center).magnitude / (chest_editbone.tail - chest_editbone.head).magnitude
+        self.create_circle_widget("WGT_Chest", chest_editbone, radius)
+        print(radius)
+        
+    #def create_arm_fk_widgets(self, side=None):
+    #    if side == None:
+    #        self.create_arm_fk_widgets
         
         
 if __name__ == '__main__':
@@ -847,4 +874,5 @@ if __name__ == '__main__':
     vrig.setup_spine_mechanism()
     vrig.setup_neck_mechanism()
     vrig.setup_global_control()
-    vrig.create_hips_widget()
+    #vrig.create_hips_widget()
+    vrig.create_chest_widget()
