@@ -377,6 +377,7 @@ class VRigify:
         foot_editbone = edit_bones.new("MCH_Foot" + suffix + "_" + side)
         foot_editbone.head = self.base_foot_editbones[side].head
         foot_editbone.tail = self.base_foot_editbones[side].tail
+        foot_editbone.tail.z = 0
         
         upper_leg_editbone.parent = edit_bones[self.leg_parent_names[side]]
         lower_leg_editbone.parent = upper_leg_editbone
@@ -463,10 +464,13 @@ class VRigify:
         pole_subtarget_editbone.head = second_link.head + pole_offset
         pole_subtarget_editbone.tail = pole_subtarget_editbone.head + 0.2 * pole_offset
         
+        final_link_name = final_link.name
+        second_link_name = second_link.name
+        pole_subtarget_name = pole_subtarget_editbone.name
         bpy.ops.object.mode_set(mode='POSE')
-        final_link_posebone = pose_bones[final_link.name]
-        second_link_posebone = pose_bones[second_link.name]
-        pole_subtarget_posebone = pose_bones[pole_subtarget_editbone.name]
+        final_link_posebone = pose_bones[final_link_name]
+        second_link_posebone = pose_bones[second_link_name]
+        pole_subtarget_posebone = pose_bones[pole_subtarget_name]
         
         bpy.ops.object.mode_set(mode='POSE')
         ik_constraint = Utilities.make_ik_constraint(self.armature, second_link_posebone, final_link_posebone)#, pole_subtarget_posebone)
@@ -726,9 +730,14 @@ class VRigify:
         upper_chest_parent_posebone = pose_bones[upper_chest_parent_editbone.name]
         chest_control_posebone = pose_bones[chest_control_editbone.name]
         
-        spine_constraint = spine_parent_posebone.constraints.new(type='COPY_LOCATION')
+        spine_constraint = spine_parent_posebone.constraints.new(type="COPY_LOCATION")
         spine_constraint.target = self.armature
         spine_constraint.subtarget = hips_control_posebone.name
+        
+        # This causes a dependency cycle
+        #chest_control_constraint = chest_control_posebone.constraints.new(type="COPY_LOCATION")
+        #chest_control_constraint.target = self.armature
+        #chest_control_constraint.subtarget = upper_chest_parent_posebone.name#self.armature.pose.bones["J_Bip_C_UpperChest"].name#upper_chest_posebone.name
         
         Utilities.make_multi_copy_rot_constraints(self.armature, hips_control_posebone, chest_control_posebone, [hips_parent_posebone, spine_parent_posebone, chest_parent_posebone, upper_chest_parent_posebone])
         
@@ -782,10 +791,11 @@ class VRigify:
             
         
     def create_widget(self, name, editbone, verts, edges):
-        mesh = bpy.data.meshes.new(name=name)        
+        mesh = bpy.data.meshes.new(name=name)
         mesh.from_pydata(verts, edges, [])
         mesh.validate()
     
+        editbone_name = editbone.name
         bpy.ops.object.mode_set(mode='OBJECT')
         self.armature.select = False
         ob = bpy_extras.object_utils.object_data_add(bpy.context, mesh)
@@ -793,15 +803,17 @@ class VRigify:
         self.armature.select = True
         bpy.context.view_layer.objects.active = self.armature
         bpy.ops.object.mode_set(mode='POSE')
-        self.armature.pose.bones[editbone.name].custom_shape = ob
+        self.armature.pose.bones[editbone_name].custom_shape = ob
         bpy.ops.object.mode_set(mode='EDIT')
+        print("create_widget()")
         
         
     def create_cuboid_widget(self, name, editbone, half_sizes, offset=Vector((0,0,0))):
-        verts = [  (-half_sizes.x+offset.x, -half_sizes.y+offset.y, -half_sizes.z+offset.z), ( half_sizes.x+offset.x, -half_sizes.y+offset.y, -half_sizes.z+offset.z),
-                   (-half_sizes.x+offset.x,  half_sizes.y+offset.y, -half_sizes.z+offset.z), ( half_sizes.x+offset.x,  half_sizes.y+offset.y, -half_sizes.z+offset.z),
-                   (-half_sizes.x+offset.x, -half_sizes.y+offset.y,  half_sizes.z+offset.z), ( half_sizes.x+offset.x, -half_sizes.y+offset.y,  half_sizes.z+offset.z),
-                   (-half_sizes.x+offset.x,  half_sizes.y+offset.y,  half_sizes.z+offset.z), ( half_sizes.x+offset.x,  half_sizes.y+offset.y,  half_sizes.z+offset.z)]
+        half_size_x, half_size_y, half_size_z = half_sizes
+        verts = [  (-half_size_x+offset.x, -half_size_y+offset.y, -half_size_z+offset.z), ( half_size_x+offset.x, -half_size_y+offset.y, -half_size_z+offset.z),
+                   (-half_size_x+offset.x,  half_size_y+offset.y, -half_size_z+offset.z), ( half_size_x+offset.x,  half_size_y+offset.y, -half_size_z+offset.z),
+                   (-half_size_x+offset.x, -half_size_y+offset.y,  half_size_z+offset.z), ( half_size_x+offset.x, -half_size_y+offset.y,  half_size_z+offset.z),
+                   (-half_size_x+offset.x,  half_size_y+offset.y,  half_size_z+offset.z), ( half_size_x+offset.x,  half_size_y+offset.y,  half_size_z+offset.z)]
         edges = [  (0, 1), (1, 3), (3, 2), (2, 0),
                     (1, 5), (5, 4), (4, 0),
                     (2, 6), (6, 4), 
@@ -818,6 +830,7 @@ class VRigify:
         steps_amount = 24
         circle_verts = [ (radius*cos(theta), 0, radius*sin(theta)) for theta in [2 * i * 3.14159/steps_amount for i in range(steps_amount)]]
         circle_edges = [(i, (i+1)%len(circle_verts)) for i in range(len(circle_verts))]
+        print("create_circle_widget()")
         self.create_widget(name, editbone, circle_verts, circle_edges)
         
     
@@ -881,20 +894,39 @@ class VRigify:
         self.create_cuboid_widget("WGT_Hand_IK_" + side, hand_editbone, Vector((0.3, 0.9, 0.3)), Vector((0.0, 0.9, 0.0)))
         
         
+    def create_toe_widget(self, side=None):
+        if side == None:
+            self.create_toe_widget('L')
+            self.create_toe_widget('R')
+            return
+        self.detect_base_leg_bones()
+        toe_editbone = self.armature.data.edit_bones[self.base_toe_editbones[side].name]
+        print("create_toe_widget()")
+        print(toe_editbone.name)
+        self.create_circle_widget("WGT_Toe_" + side, toe_editbone, 1.0)
+    
+    
+    def setup_all(self):
+        self.reset()
+        self.normalize_base_leg_bone_rolls()
+        self.setup_leg_rig()
+        self.setup_arm_rig()
+        self.setup_spine_mechanism()
+        self.setup_neck_mechanism()
+        self.setup_global_control()
+        self.create_hips_widget()
+        self.create_chest_widget()
+        self.create_arm_fk_widgets()
+        self.create_hand_ik_widget()
+        self.create_leg_fk_widgets()
+        self.create_foot_ik_widget()
+        self.create_toe_widget()
+        #self.create_neck_widget()
+        
+        
 if __name__ == '__main__':
     armature = bpy.context.active_object
     
     vrig = VRigify(armature)
-    vrig.reset()
-    vrig.normalize_base_leg_bone_rolls()
-    vrig.setup_leg_rig()
-    vrig.setup_arm_rig()
-    vrig.setup_spine_mechanism()
-    vrig.setup_neck_mechanism()
-    vrig.setup_global_control()
-    #vrig.create_hips_widget()
-    #vrig.create_chest_widget()
-    #vrig.create_arm_fk_widgets()
-    #vrig.create_hand_ik_widget()
-    #vrig.create_leg_fk_widgets()
-    vrig.create_foot_ik_widget()
+    vrig.setup_all()
+    
