@@ -422,10 +422,19 @@ class VRigify:
         return upper_arm_editbone, lower_arm_editbone, hand_editbone
     
     
-    def lock_rotation(self, posebone):
+    def lock_rotation(self, posebone, rotating_axis):
         posebone.rotation_mode = 'XYZ'
+        posebone.lock_rotation[0] = True
         posebone.lock_rotation[1] = True
         posebone.lock_rotation[2] = True
+        if rotating_axis == 'X':
+            posebone.lock_rotation[0] = False
+        elif rotating_axis == 'Y':
+            posebone.lock_rotation[1] = False
+        elif rotating_axis == 'Z':
+            posebone.lock_rotation[2] = False
+        else:
+            print("lock_rotation() error: Incorrect rotating_axis argument")
         
     
     def add_leg_fk_chain(self, side):
@@ -439,7 +448,7 @@ class VRigify:
         
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
-        self.lock_rotation(pose_bones[self.lower_leg_fk_names[side]])
+        self.lock_rotation(pose_bones[self.lower_leg_fk_names[side]], 'X')
         
         
     def add_arm_fk_chain(self, side):
@@ -450,9 +459,7 @@ class VRigify:
         
         bpy.ops.object.mode_set(mode='POSE')
         lower_arm_posebone = self.armature.pose.bones[self.lower_arm_fk_names[side]]
-        lower_arm_posebone.rotation_mode = 'XYZ'
-        lower_arm_posebone.lock_rotation[1] = True
-        lower_arm_posebone.lock_rotation[2] = True
+        self.lock_rotation(lower_arm_posebone, 'X')
         
         
     def add_ik_chain(self, side, pole_name, pole_offset, first_link, second_link, final_link, pole_angle = None): 
@@ -602,12 +609,16 @@ class VRigify:
         fingers_editbone = edit_bones.new("CTRL_Fingers_" + side)
         fingers_editbone.head = palm_editbone.tail
         fingers_editbone.tail = fingers_editbone.head + Vector((0.03 * (1 if side == 'L' else -1), 0, 0))
+        fingers_editbone.roll = palm_editbone.roll
         fingers_editbone.parent = palm_editbone
+        fingers_name = fingers_editbone.name
         
         fingertips_editbone = edit_bones.new("CTRL_Fingertips_" + side)
         fingertips_editbone.head = fingers_editbone.tail
         fingertips_editbone.tail = fingertips_editbone.head + Vector((0.015 * (1 if side == 'L' else -1), 0, 0))        
+        fingertips_editbone.roll = fingers_editbone.roll
         fingertips_editbone.parent = fingers_editbone
+        fingertips_name = fingertips_editbone.name
         
         little_fingers = self.add_finger_chain(side, "Little", palm_editbone, fingers_editbone, fingertips_editbone)
         ring_fingers = self.add_finger_chain(side, "Ring", palm_editbone, fingers_editbone, fingertips_editbone)
@@ -619,8 +630,12 @@ class VRigify:
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
         palm_posebone = pose_bones[palm_editbone.name]
-        fingers_posebone = pose_bones[fingers_editbone.name]
-        fingertips_posebone = pose_bones[fingertips_editbone.name]
+        
+        fingers_posebone = pose_bones[fingers_name]
+        self.lock_rotation(fingers_posebone, 'Z')
+        fingertips_posebone = pose_bones[fingertips_name]
+        self.lock_rotation(fingertips_posebone, 'Z')
+        
         def set_finger_chain_constraints(finger_list, influence):
             finger0_posebone = pose_bones[finger_list[0].name]
             finger1_posebone = pose_bones[finger_list[1].name]
