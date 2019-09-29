@@ -178,7 +178,6 @@ class VRigify:
         
         
     def detect_base_leg_bones(self):
-        print(self.armature)
         bpy.ops.object.mode_set(mode='EDIT')
         edit_bones = self.armature.data.edit_bones
         self.base_upper_leg_editbones = Pair(edit_bones["J_Bip_L_UpperLeg"], edit_bones["J_Bip_R_UpperLeg"])
@@ -245,7 +244,6 @@ class VRigify:
         self.heel_names[side_string] = heel_back_editbone.name
         
         control_bone = armature.data.edit_bones.new(name='CTRL_Heel_' + side_string)
-        #control_bone.layers[Layers.ctrl] = True
         control_bone.head = heel_back_editbone.head + Vector((0, 0.05, 0))
         control_bone.tail = control_bone.head + Vector((0, 0, 0.05))
         self.heel_control_names[side_string] = control_bone.name
@@ -367,7 +365,6 @@ class VRigify:
         
         self.base_upper_leg_editbones[side].roll = 0
         self.base_lower_leg_editbones[side].roll = 0
-        print(self.base_foot_editbones[side].name)
         self.base_foot_editbones[side].roll = 0
         
     
@@ -387,8 +384,6 @@ class VRigify:
         foot_editbone = edit_bones.new("MCH_Foot" + suffix + "_" + side)
         foot_editbone.head = self.base_foot_editbones[side].head
         foot_editbone.tail = self.base_foot_editbones[side].tail
-        #foot_editbone.tail.z = foot_editbone.head.z
-        #foot_editbone.roll = -3.14159
         
         toe_editbone = edit_bones.new("MCH_Toe" + suffix + "_" + side)
         toe_editbone.head = self.base_toe_editbones[side].head
@@ -396,10 +391,6 @@ class VRigify:
         
         upper_leg_editbone.parent = edit_bones[self.leg_parent_names[side]]
         lower_leg_editbone.parent = upper_leg_editbone
-        #foot_editbone.parent = lower_leg_editbone
-        # Note: Parenthood for toe bones has been commented out (they're different between fk and ik chains), they're assigned on their respective "add chain" methods
-        #foot_editbone.parent = lower_leg_editbone
-        #toe_editbone.parent = foot_editbone.parent
         
         return upper_leg_editbone, lower_leg_editbone, foot_editbone, toe_editbone
     
@@ -430,14 +421,15 @@ class VRigify:
         
         return upper_arm_editbone, lower_arm_editbone, hand_editbone
     
+    
     def lock_rotation(self, posebone):
         posebone.rotation_mode = 'XYZ'
         posebone.lock_rotation[1] = True
         posebone.lock_rotation[2] = True
+        
     
     def add_leg_fk_chain(self, side):
         upper_leg_editbone, lower_leg_editbone, foot_editbone, toe_editbone = self.create_leg_bones("_FK", side)
-        #upper_leg_editbone.layers[Layers.fk], lower_leg_editbone.layers[Layers.fk], foot_editbone.layers[Layers.fk] = True, True, True
         self.upper_leg_fk_names[side] = upper_leg_editbone.name
         self.lower_leg_fk_names[side] = lower_leg_editbone.name
         self.foot_fk_names[side] = foot_editbone.name
@@ -445,26 +437,13 @@ class VRigify:
         foot_editbone.parent = lower_leg_editbone
         toe_editbone.parent = foot_editbone
         
-        #base_foot_editbone = self.armature.data.edit_bones["J_Bip_" + side + "_Foot"]
-        #self.armature.data.edit_bones["J_Bip_" + side + "_ToeBase"].parent = foot_editbone
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
-        #self.lock_rotation(pose_bones[self.upper_leg_fk_names[side])
         self.lock_rotation(pose_bones[self.lower_leg_fk_names[side]])
-        #self.lock_rotation(pose_bones[self.foot_fk_names[side]])
-        #upper_leg_posebone = pose_bones[self.upper_leg_fk_names[side]]
-        #upper_leg_posebone.rotation_mode = 'XYZ'
-        #upper_leg_posebone.lock_rotation[1] = True
-        #upper_leg_posebone.lock_rotation[2] = True
-        #lower_leg_posebone = pose_bones[self.lower_leg_fk_names[side]]
-        #lower_leg_posebone.rotation_mode = 'XYZ'
-        #lower_leg_posebone.lock_rotation[1] = True
-        #lower_leg_posebone.lock_rotation[2] = True
         
         
     def add_arm_fk_chain(self, side):
         upper_arm_editbone, lower_arm_editbone, hand_editbone = self.create_arm_bones("_FK", side)
-        #upper_arm_editbone.layers[Layers.fk], lower_arm_editbone.layers[Layers.fk], hand_editbone.layers[Layers.fk] = True, True, True
         self.upper_arm_fk_names[side] = upper_arm_editbone.name
         self.lower_arm_fk_names[side] = lower_arm_editbone.name
         self.hand_fk_names[side] = hand_editbone.name
@@ -481,7 +460,6 @@ class VRigify:
         pose_bones = self.armature.pose.bones 
         
         pole_subtarget_editbone = edit_bones.new(pole_name + side)
-        #pole_subtarget_editbone.layers[Layers.ctrl] = True
         pole_subtarget_editbone.head = second_link.head + pole_offset
         pole_subtarget_editbone.tail = pole_subtarget_editbone.head + 0.2 * pole_offset
         
@@ -509,15 +487,11 @@ class VRigify:
     
     def add_leg_ik_chain(self, side):
         upper_leg_editbone, lower_leg_editbone, foot_editbone, toe_editbone = self.create_leg_bones("_IK", side)
-        #foot_editbone.layers[Layers.ik] = True
         edit_bones = self.armature.data.edit_bones
-        #foot_editbone.parent = None
-        #
         
         foot_ik_control_editbone = edit_bones.new("CTRL_Foot_IK_" + side)
-        #auxiliary_foot_editbone.parent = lower_leg_editbone
         foot_ik_control_editbone.head = foot_editbone.head
-        foot_ik_control_editbone.tail = foot_editbone.tail# + Vector((0, -0.05, 0))
+        foot_ik_control_editbone.tail = foot_editbone.tail
         foot_ik_control_editbone.roll = -3.14159
         self.foot_ik_control_names[side] = foot_ik_control_editbone.name
         
@@ -525,14 +499,8 @@ class VRigify:
         foot_editbone.parent = edit_bones[self.rocker_names[side]]
         foot_editbone.use_local_location = False
         toe_editbone.parent = edit_bones[self.heel_names[side]]
-        #edit_bones["J_Bip_" + side + "_ToeBase"].parent = edit_bones[self.heel_names[side]]
         edit_bones[self.heel_names[side]].parent = foot_ik_control_editbone
         edit_bones[self.heel_control_names[side]].parent = foot_ik_control_editbone
-        #print("CTRL_Heel_L's parent is...")
-        #print(edit_bones["CTRL_Heel_L"].parent)
-        #print(self.heel_names[side])
-        #print(foot_ik_control_editbone.name)
-        
         
         self.upper_leg_ik_names[side] = upper_leg_editbone.name
         self.lower_leg_ik_names[side] = lower_leg_editbone.name
@@ -544,7 +512,6 @@ class VRigify:
    
     def add_arm_ik_chain(self, side):
        upper_arm_editbone, lower_arm_editbone, hand_editbone = self.create_arm_bones("_IK", side)
-       #upper_arm_editbone.layers[Layers.ik], lower_arm_editbone.layers[Layers.ik], hand_editbone.layers[Layers.ik] = True, True, True
        edit_bones = self.armature.data.edit_bones
        hand_editbone.parent = None
        hand_editbone.roll = lower_arm_editbone.roll
@@ -556,8 +523,7 @@ class VRigify:
        self.elbow_target_names[side] = self.add_ik_chain(side, "CTRL_ElbowTarget_", Vector((0, 1, 0)), upper_arm_editbone, lower_arm_editbone, hand_editbone, 3.14159 / 2)
               
         
-    #def setup_fkik_mechanism(self, side, first_owner_posebone, second_owner_posebone, final_owner_posebone, first_target_posebone, second_target_posebone, final_target_posebone):
-    def setup_fkik_mechanism(self, side, owner_posebones, target_posebones):
+    def setup_fkik_mechanism(self, side, owner_posebones, target_posebones): # Necessary?
         bpy.ops.object.mode_set(mode='EDIT')
         self.detect_base_leg_bones()
         edit_bones = self.armature.data.edit_bones
@@ -566,9 +532,6 @@ class VRigify:
         pose_bones = self.armature.pose.bones
         for i in range(len(owner_posebones)):
             Utilities.make_copy_rot_constraint(self.armature, owner_posebones[i], target_posebones[i])
-        #Utilities.make_copy_rot_constraint(self.armature, first_owner_posebone, first_target_posebone)
-        #Utilities.make_copy_rot_constraint(self.armature, second_owner_posebone, second_target_posebone)
-        #Utilities.make_copy_rot_constraint(self.armature, final_owner_posebone, final_target_posebone)
         
         
     def setup_ik_driver(self, side, owner_posebone, target_ik_posebone, driver_suffix):
@@ -595,11 +558,9 @@ class VRigify:
         lower_leg_ik_posebone = pose_bones[self.lower_leg_ik_names[side]]
         foot_ik_posebone = pose_bones[self.foot_ik_names[side]]
         toe_ik_posebone = pose_bones[self.toe_ik_names[side]]
-        #foot_ik_control_posebone = pose_bones[self.foot_ik_control_names[side]]
         self.setup_ik_driver(side, owner_upper_leg_posebone, upper_leg_ik_posebone, "leg")
         self.setup_ik_driver(side, owner_lower_leg_posebone, lower_leg_ik_posebone, "leg")
         self.setup_ik_driver(side, owner_foot_posebone, foot_ik_posebone, "leg")
-        #self.setup_ik_driver(side, owner_foot_posebone, foot_ik_control_posebone, "leg")
         self.setup_ik_driver(side, owner_toe_posebone, toe_ik_posebone, "leg")
         
         
@@ -632,7 +593,6 @@ class VRigify:
         
         # Create control bones
         palm_editbone = edit_bones.new("CTRL_Palm_" + side)
-        #palm_editbone.layers[Layers.ctrl] = True
         palm_editbone.head = self.base_hand_editbones[side].head + Vector((0, 0, 0.05))
         palm_editbone.tail = palm_editbone.head + Vector((0.06 * (1 if side == 'L' else -1), 0, 0))
         palm_editbone.roll = (-1 if side == 'L' else 1) * 3.14159 / 2 # Assuming right hand side (most likely wrong for left hand). Non-magic numbers may be preferable
@@ -640,13 +600,11 @@ class VRigify:
         self.palm_names[side] = palm_editbone.name
         
         fingers_editbone = edit_bones.new("CTRL_Fingers_" + side)
-        #fingers_editbone.layers[Layers.ctrl]
         fingers_editbone.head = palm_editbone.tail
         fingers_editbone.tail = fingers_editbone.head + Vector((0.03 * (1 if side == 'L' else -1), 0, 0))
         fingers_editbone.parent = palm_editbone
         
         fingertips_editbone = edit_bones.new("CTRL_Fingertips_" + side)
-        #fingertips_editbone.layers[Layers.ctrl]
         fingertips_editbone.head = fingers_editbone.tail
         fingertips_editbone.tail = fingertips_editbone.head + Vector((0.015 * (1 if side == 'L' else -1), 0, 0))        
         fingertips_editbone.parent = fingers_editbone
@@ -841,7 +799,7 @@ class VRigify:
             edit_bones[self.knee_target_names[side]].parent = global_editbone
             edit_bones[self.elbow_target_names[side]].parent = global_editbone
             edit_bones[self.hand_ik_names[side]].parent = global_editbone
-            #edit_bones[self.foot_ik_names[side]].parent = global_editbone
+            edit_bones[self.foot_ik_control_names[side]].parent = global_editbone
             
         
     def create_widget(self, name, editbone, verts, edges):
@@ -859,7 +817,6 @@ class VRigify:
         bpy.ops.object.mode_set(mode='POSE')
         self.armature.pose.bones[editbone_name].custom_shape = ob
         bpy.ops.object.mode_set(mode='EDIT')
-        #print("create_widget()")
         
         
     def create_cuboid_widget(self, name, editbone, half_sizes, offset=Vector((0,0,0))):
@@ -884,7 +841,6 @@ class VRigify:
         steps_amount = 24
         circle_verts = [ (radius*cos(theta), 0, radius*sin(theta)) for theta in [2 * i * 3.14159/steps_amount for i in range(steps_amount)]]
         circle_edges = [(i, (i+1)%len(circle_verts)) for i in range(len(circle_verts))]
-        #print("create_circle_widget()")
         self.create_widget(name, editbone, circle_verts, circle_edges)
         
     
@@ -954,9 +910,6 @@ class VRigify:
             self.create_toe_widget('R')
             return
         self.detect_base_leg_bones()
-        #toe_editbone = self.armature.data.edit_bones[self.base_toe_editbones[side].name]
-        #print("create_toe_widget()")
-        #print(toe_editbone.name)
         edit_bones = self.armature.data.edit_bones
         self.create_circle_widget("WGT_Toe_" + side, edit_bones[self.toe_fk_names[side]], 1.0)
         self.create_circle_widget("WGT_Toe_" + side, edit_bones[self.toe_ik_names[side]], 1.0)
