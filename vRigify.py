@@ -130,6 +130,8 @@ class VRigify:
     def __init__(self, armature_object):
         self.armature = armature_object
         
+        self.global_name = None
+        
         self.leg_parent_names = Pair() # It's not nice like this, but bone addresses are bound to change unpredictably during execution,
         self.leg_socket_names = Pair() # it's more reliable to look them up by their names
         self.knee_target_names = Pair()
@@ -247,13 +249,16 @@ class VRigify:
         control_bone.head = heel_back_editbone.head + Vector((0, 0.05, 0))
         control_bone.tail = control_bone.head + Vector((0, 0, 0.05))
         self.heel_control_names[side_string] = control_bone.name
+        control_bone_name = control_bone.name
         
         heel_base_editbone.parent = heel_back_editbone
         
-        ## Create constraints
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
         
+        pose_bones[control_bone_name].use_local_location = False
+        
+        ## Create constraints
         heel_base_posebone = pose_bones[heel_base_editbone.name]
         heel_back_posebone = pose_bones[heel_back_editbone.name]
         Utilities.make_copy_rot_constraint(armature, heel_base_posebone, control_bone, 'LOCAL')
@@ -366,6 +371,7 @@ class VRigify:
         self.base_upper_leg_editbones[side].roll = 0
         self.base_lower_leg_editbones[side].roll = 0
         self.base_foot_editbones[side].roll = 0
+        self.base_toe_editbones[side].roll = 0
         
     
     def create_leg_bones(self, suffix, side):
@@ -807,6 +813,7 @@ class VRigify:
         global_editbone = edit_bones.new("CTRL_Global")
         global_editbone.head = self.armature.location
         global_editbone.tail = self.armature.location + Vector((0, 0, 0.1))
+        self.global_name = global_editbone.name
         edit_bones[self.hips_control_name].parent = global_editbone
         edit_bones[self.neck_name].parent = global_editbone
         edit_bones[self.chest_control_name].parent = edit_bones[self.hips_control_name]
@@ -929,6 +936,9 @@ class VRigify:
         self.create_circle_widget("WGT_Toe_" + side, edit_bones[self.toe_fk_names[side]], 1.0)
         self.create_circle_widget("WGT_Toe_" + side, edit_bones[self.toe_ik_names[side]], 1.0)
     
+    def create_global_widget(self):
+        self.create_circle_widget("WGT_Global", self.armature.data.edit_bones[self.global_name], 5)
+    
     
     def setup_all(self):
         self.reset()
@@ -946,6 +956,7 @@ class VRigify:
         self.create_foot_ik_widget()
         self.create_toe_widget()
         #self.create_neck_widget()
+        self.create_global_widget()
         
         
 if __name__ == '__main__':
