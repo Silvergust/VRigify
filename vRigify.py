@@ -249,14 +249,13 @@ class VRigify:
         control_bone.head = heel_back_editbone.head + Vector((0, 0.05, 0))
         control_bone.tail = control_bone.head + Vector((0, 0, 0.05))
         self.heel_control_names[side_string] = control_bone.name
+        control_bone.use_local_location = False
         control_bone_name = control_bone.name
         
         heel_base_editbone.parent = heel_back_editbone
         
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
-        
-        pose_bones[control_bone_name].use_local_location = False
         
         ## Create constraints
         heel_base_posebone = pose_bones[heel_base_editbone.name]
@@ -325,6 +324,7 @@ class VRigify:
         upper_bone = self.base_upper_leg_editbones[side]
         parent, socket = self.add_socket_mechanism(side, hips_bone, "MCH_LegParent_", "MCH_LegSocket_", upper_bone, "leg_follows_hip_")
         self.leg_parent_names[side] = parent.name
+        print(socket.name)
         self.leg_socket_names[side] = socket.name
     
     
@@ -831,10 +831,10 @@ class VRigify:
     
         editbone_name = editbone.name
         bpy.ops.object.mode_set(mode='OBJECT')
-        self.armature.select = False
+        self.armature.select_set(False)
         ob = bpy_extras.object_utils.object_data_add(bpy.context, mesh)
         bpy.ops.object.select_all(action='DESELECT')
-        self.armature.select = True
+        self.armature.select_set(True)
         bpy.context.view_layer.objects.active = self.armature
         bpy.ops.object.mode_set(mode='POSE')
         self.armature.pose.bones[editbone_name].custom_shape = ob
