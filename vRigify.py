@@ -608,7 +608,7 @@ class VRigify:
         palm_editbone = edit_bones.new("CTRL_Palm_" + side)
         palm_editbone.head = self.base_hand_editbones[side].head + Vector((0, 0, 0.05))
         palm_editbone.tail = palm_editbone.head + Vector((0.06 * (1 if side == 'L' else -1), 0, 0))
-        palm_editbone.roll = (-1 if side == 'L' else 1) * 3.14159 / 2 # Assuming right hand side (most likely wrong for left hand). Non-magic numbers may be preferable
+        palm_editbone.roll = (0 if side == 'L' else 1) * 3.14159 #/ 2 # Assuming right hand side (most likely wrong for left hand). Non-magic numbers may be preferable
         palm_editbone.parent = self.base_hand_editbones[side] # Will almost certainly need to change
         self.palm_names[side] = palm_editbone.name
         
