@@ -840,6 +840,12 @@ class VRigify:
         self.armature.pose.bones[editbone_name].custom_shape = ob
         bpy.ops.object.mode_set(mode='EDIT')
         
+        if "Widgets" not in bpy.data.collections.keys():
+            widgets_collection = bpy.data.collections.new("Widgets")
+            bpy.context.scene.collection.children.link(widgets_collection)
+        bpy.context.scene.collection.objects.unlink(ob)
+        bpy.data.collections["Widgets"].objects.link(ob)
+        
         
     def create_cuboid_widget(self, name, editbone, half_sizes, offset=Vector((0,0,0))):
         half_size_x, half_size_y, half_size_z = half_sizes
@@ -938,7 +944,6 @@ class VRigify:
     
     def create_global_widget(self):
         self.create_circle_widget("WGT_Global", self.armature.data.edit_bones[self.global_name], 5)
-    
     
     def setup_all(self):
         self.reset()
