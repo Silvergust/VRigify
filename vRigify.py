@@ -295,9 +295,7 @@ class VRigify:
         control_bone = pose_bones[control_bone_name]
         
         ## Create constraints
-        #print("name: " + str(heel_base_editbone.name))
-        heel_base_posebone = pose_bones[heel_base_editbone_name] #str(heel_base_editbone.name)]
-        #print("name: " + str(heel_back_editbone.name))
+        heel_base_posebone = pose_bones[heel_base_editbone_name]
         heel_back_posebone = pose_bones[heel_back_editbone_name]
         Utilities.make_copy_rot_constraint(armature, heel_base_posebone, control_bone, 'LOCAL')
         Utilities.make_copy_rot_constraint(armature, heel_back_posebone, control_bone, 'LOCAL')
@@ -334,7 +332,6 @@ class VRigify:
         socket_name = socket.name
         
         socket.parent = outer_bone
-        #socket.use_connect = True
         first_link.parent = parent
         first_link.use_connect = False
         first_link.use_local_location = True
@@ -359,6 +356,7 @@ class VRigify:
         self.assign_influence_driver(copy_trns_constraint, prop_name + side)
         
         return parent_posebone, socket_posebone
+    
 
     def add_leg_socket_mechanism(self, side):
         bpy.ops.object.mode_set(mode='EDIT')
@@ -455,13 +453,13 @@ class VRigify:
         
         edit_bones = self.armature.data.edit_bones
         upper_arm_editbone = edit_bones.new("MCH_UpperArm" + suffix + "_" + side)
-        upper_arm_editbone.head = self.base_upper_arm_editbones[side].head
+        upper_arm_editbone.head = self.base_upper_arm_editbones[side].head 
         upper_arm_editbone.tail = self.base_lower_arm_editbones[side].head
         upper_arm_editbone.roll = self.base_upper_arm_editbones[side].roll
         upper_arm_editbone.layers[Layers.get_protected_layer(layer) if protected else layer] = True
         
         lower_arm_editbone = edit_bones.new("MCH_LowerArm" + suffix + "_" + side)
-        lower_arm_editbone.head = self.base_lower_arm_editbones[side].head
+        lower_arm_editbone.head = self.base_lower_arm_editbones[side].head + Vector((0.0, 0.005, 0.0)) # Assuming model is facing negative global Y
         lower_arm_editbone.tail = self.base_hand_editbones[side].head
         lower_arm_editbone.roll = self.base_lower_arm_editbones[side].roll
         lower_arm_editbone.layers[Layers.get_protected_layer(layer) if protected else layer] = True
@@ -538,7 +536,6 @@ class VRigify:
         bpy.ops.object.mode_set(mode='POSE')
         ik_constraint = Utilities.make_ik_constraint(self.armature, second_link_posebone, final_link_posebone, pole_subtarget_posebone)#, pole_subtarget_posebone)
         if pole_angle == None:
-            #ik_constraint.pole_angle = -3.14159 / 4
             ik_constraint.pole_angle = (-1 if side == "L" else 2) * 3.14159 / 2 #TODO: Solo pude conseguir buenos resultados con pole_angle=0 y roll con z hacia arriba
         else:
             ik_constraint.pole_angle = pole_angle
@@ -575,8 +572,7 @@ class VRigify:
         self.foot_ik_names[side] = foot_editbone.name
         self.toe_ik_names[side] = toe_editbone.name
         
-        #pole_angle = (-1 if side == "L" else 1) * 3.14159 / 2
-        self.knee_target_names[side] = self.add_ik_chain(side, "CTRL_KneeTarget_", Vector((0, -1, 0)), upper_leg_editbone, lower_leg_editbone, foot_editbone, -3.14159/4)#, pole_angle)
+        self.knee_target_names[side] = self.add_ik_chain(side, "CTRL_KneeTarget_", Vector((0, -1, 0)), upper_leg_editbone, lower_leg_editbone, foot_editbone, -3.14159/2)#, pole_angle)
         #angle = -90
    
     def add_arm_ik_chain(self, side):
@@ -589,7 +585,7 @@ class VRigify:
        self.lower_arm_ik_names[side] = lower_arm_editbone.name
        self.hand_ik_names[side] = hand_editbone.name
        
-       angle = 5 * 3.14159 / 6 * (-1 if side == 'L' else 1)
+       angle = - 3.14159 / 2
        self.elbow_target_names[side] = self.add_ik_chain(side, "CTRL_ElbowTarget_", Vector((0, 1, 0)), upper_arm_editbone, lower_arm_editbone, hand_editbone, angle)
               
         
@@ -813,7 +809,6 @@ class VRigify:
         
         chest_control_editbone = edit_bones.new("CTRL_Chest")
         chest_control_editbone.layers[Layers.ctrl] = True
-        #chest_control_editbone.head = lower_chest_parent_editbone.tail
         chest_control_editbone.head = upper_chest_parent_editbone.tail
         chest_control_editbone.tail = chest_control_editbone.head + offset
         chest_control_editbone.roll = upper_chest_parent_editbone.roll
@@ -835,13 +830,6 @@ class VRigify:
         chest_parent_posebone = pose_bones[chest_parent_editbone_name]	
         upper_chest_parent_posebone = pose_bones[upper_chest_parent_editbone_name]	
         chest_control_posebone = pose_bones[chest_control_editbone_name]  
-
-#        hips_control_posebone = pose_bones[hips_control_editbone.name]
-#        hips_parent_posebone = pose_bones[hips_parent_editbone.name]
-#        spine_parent_posebone = pose_bones[spine_parent_editbone.name]
-#        chest_parent_posebone = pose_bones[chest_parent_editbone.name]
-#        upper_chest_parent_posebone = pose_bones[upper_chest_parent_editbone.name]
-#        chest_control_posebone = pose_bones[chest_control_editbone.name]
         
         spine_constraint = spine_parent_posebone.constraints.new(type="COPY_LOCATION")
         spine_constraint.target = self.armature
