@@ -1,7 +1,6 @@
 import bpy
 import bpy_extras
 
-
 from math import(
 cos,
 sin
@@ -10,7 +9,6 @@ sin
 from mathutils import (
 Vector
 )
-
 
 center_bone_names = ["CTRL_Hips",
                     "MCH_HipsParent",
@@ -59,15 +57,36 @@ side_bone_names = [ "MCH_LegParent_",
                     "MCH_Index0_",
                     "MCH_Thumb0_"]
 class Layers:
-    ctrl = 1
-    fk = 2
-    ik = 3
+    ctrl = 16
+    fk_arm_l = 1
+    fk_arm_r = 2
+    ik_arm_r = 3
+    ik_arm_l = 4
+    fk_leg_l = 17
+    fk_leg_r = 18
+    ik_leg_l = 19
+    ik_leg_r = 20
+    mch = 4
+    skirt = 19
+    protected_dict = {
+    fk_arm_l : 9,
+    fk_arm_r : 10,
+    ik_arm_l : 11,
+    ik_arm_r : 12,
+    fk_leg_l : 25,
+    fk_leg_r : 26,
+    ik_leg_l : 27,
+    ik_leg_r : 28
+    }
+    
+    def get_protected_layer(layer):
+        return Layers.protected_dict[layer]
+        
     
 class Utilities:
     def make_copy_constraint(armature, owner_bone, target_bone, type, space='WORLD', use_offset=False): #I'd love to not have armature as argument and find it from owner_bone instead
         constraint = owner_bone.constraints.new(type=type)
         constraint.target = armature
-        #print("target.bone: ", target_bone.name)
         constraint.subtarget = target_bone.name
         constraint.target_space = space
         constraint.owner_space = space
@@ -200,6 +219,18 @@ class VRigify:
         self.base_hand_editbones = Pair(edit_bones["J_Bip_L_Hand"], edit_bones["J_Bip_R_Hand"])
     
     
+    def detect_skirt_bones(self):
+        bpy.ops.object.mode_set(mode='EDIT')
+        edit_bones = self.armature.data.edit_bones
+        self.skirt_bones = []
+        for bone in edit_bones:
+            if "Skirt" in bone.name:
+                self.skirt_bones.append(bone)
+                
+    def set_skirt_bone_layers(self):
+        for bone in self.skirt_bones:
+            bone.layers[Layers.skirt] = True
+    
     def reset(self, side_string=None):
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.armature.select_all(action='DESELECT')
@@ -237,38 +268,37 @@ class VRigify:
         self.detect_base_leg_bones()
         
         ## Create new bones
-        heel_base_name = 'MCH_HeelBase_' + side_string
-        heel_base_editbone = armature.data.edit_bones.new(name=heel_base_name)
-        heel_base_editbone.tail = Vector((self.base_foot_editbones[side_string].tail.x, 0.1, 0.0))
-        heel_base_editbone.head = Vector((self.base_foot_editbones[side_string].tail.x,  -0.1, 0.0))
-        self.rocker_names[side_string] = heel_base_name
+        print("side_string: " + str(side_string))
+        heel_base_editbone = armature.data.edit_bones.new(name='MCH_HeelBase_' + str(side_string))
+        heel_base_editbone.tail = Vector((self.base_foot_editbones[str(side_string)].tail.x, 0.1, 0.0))
+        heel_base_editbone.head = Vector((self.base_foot_editbones[str(side_string)].tail.x,  -0.1, 0.0))
+        self.rocker_names[str(side_string)] = heel_base_editbone.name
         
-        heel_back_name = 'MCH_HeelBack_' + side_string
-        heel_back_editbone = armature.data.edit_bones.new(name=heel_back_name)
+        heel_back_editbone = armature.data.edit_bones.new(name='MCH_HeelBack_' + str(side_string))
         heel_back_editbone.head = heel_base_editbone.tail
         heel_back_editbone.tail = heel_base_editbone.tail + Vector((0, 0, 0.1))
-        self.heel_names[side_string] = heel_back_name
+        self.heel_names[str(side_string)] = heel_back_editbone.name
         
-        control_bone_name = 'CTRL_Heel_' + side_string
-        control_bone = armature.data.edit_bones.new(name=control_bone_name)
+        control_bone = armature.data.edit_bones.new(name='CTRL_Heel_' + str(side_string))
         control_bone.head = heel_back_editbone.head + Vector((0, 0.05, 0))
         control_bone.tail = control_bone.head + Vector((0, 0, 0.05))
-        self.heel_control_names[side_string] = control_bone_name
+        self.heel_control_names[str(side_string)] = control_bone.name
         control_bone.use_local_location = False
-        #control_bone_name = control_bone.name
+        control_bone_name = control_bone.name
         
         heel_base_editbone.parent = heel_back_editbone
         
+        heel_base_editbone_name = heel_base_editbone.name
+        heel_back_editbone_name = heel_back_editbone.name
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
+        control_bone = pose_bones[control_bone_name]
         
         ## Create constraints
-        print("a")
-        #print("heel_back_editbone.name: ", heel_back_editbone.name)
-        print("heel_back_name: ", heel_back_name)
-        heel_base_posebone = pose_bones[heel_base_name]
-        heel_back_posebone = pose_bones[heel_back_name]
-        control_bone = pose_bones[control_bone_name]
+        #print("name: " + str(heel_base_editbone.name))
+        heel_base_posebone = pose_bones[heel_base_editbone_name] #str(heel_base_editbone.name)]
+        #print("name: " + str(heel_back_editbone.name))
+        heel_back_posebone = pose_bones[heel_back_editbone_name]
         Utilities.make_copy_rot_constraint(armature, heel_base_posebone, control_bone, 'LOCAL')
         Utilities.make_copy_rot_constraint(armature, heel_back_posebone, control_bone, 'LOCAL')
         
@@ -304,55 +334,31 @@ class VRigify:
         socket_name = socket.name
         
         socket.parent = outer_bone
+        #socket.use_connect = True
         first_link.parent = parent
+        first_link.use_connect = False
+        first_link.use_local_location = True
+        first_link.head = parent.head
     
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
-        #parent = pose_bones[parent_name]
-        #socket = pose_bones[socket_name]
         
         socket_posebone = pose_bones[socket_name]
         parent_posebone = pose_bones[parent_name]
-        
-#        print("a")
-#        print("parent_name: ", parent_name)
-#        print("parent_posebone.name: ", parent_posebone.name)
-#        print("socket_name: ", socket_name)
-#        print("socket_posebone.name:" , socket_posebone.name)
     
         copy_loc_constraint = parent_posebone.constraints.new(type='COPY_LOCATION')
         copy_loc_constraint.target = armature
         copy_loc_constraint.subtarget = socket_posebone.name
     
-#        print("a")
-#        print("parent_name: ", parent_name)
-#        print("parent_posebone.name: ", parent_posebone.name)
-#        print("socket_name: ", socket_name)
-#        print("socket_posebone.name:" , socket_posebone.name)
-
         copy_trns_constraint = parent_posebone.constraints.new(type='COPY_TRANSFORMS')
         copy_trns_constraint.target = armature
         copy_trns_constraint.subtarget = socket_posebone.name
     
-#        print("a")
-#        print("parent_name: ", parent_name)
-#        print("parent_posebone.name: ", parent_posebone.name)
-#        print("socket_name: ", socket_name)
-#        print("socket_posebone.name:" , socket_posebone.name)
-
         if prop_name == None:
             prop_name = parent_name + "_influence" + ("" if side == "" else "_")
         self.assign_influence_driver(copy_trns_constraint, prop_name + side)
-
-#        print("a")
-#        print("parent_name: ", parent_name)
-#        print("parent_posebone.name: ", parent_posebone.name)
-#        print("socket_name: ", socket_name)
-#        print("socket_posebone.name:" , socket_posebone.name)
-
-        #return parent, socket
+        
         return parent_posebone, socket_posebone
-    
 
     def add_leg_socket_mechanism(self, side):
         bpy.ops.object.mode_set(mode='EDIT')
@@ -360,9 +366,8 @@ class VRigify:
         hips_bone = self.armature.data.edit_bones["J_Bip_C_Hips"]
         upper_bone = self.base_upper_leg_editbones[side]
         parent, socket = self.add_socket_mechanism(side, hips_bone, "MCH_LegParent_", "MCH_LegSocket_", upper_bone, "leg_follows_hip_")
-        #print("parent.name: ", parent.name)
         self.leg_parent_names[side] = parent.name
-        print(socket.name)
+        #print(socket.name)
         self.leg_socket_names[side] = socket.name
     
     
@@ -412,26 +417,31 @@ class VRigify:
         self.base_toe_editbones[side].roll = 0
         
     
-    def create_leg_bones(self, suffix, side):
+    def create_leg_bones(self, suffix, side, layer, protected):
         bpy.ops.object.mode_set(mode='EDIT')
         self.detect_base_leg_bones()
         
         edit_bones = self.armature.data.edit_bones
         upper_leg_editbone = edit_bones.new("MCH_UpperLeg" + suffix + "_" + side)
         upper_leg_editbone.head = self.base_upper_leg_editbones[side].head
-        upper_leg_editbone.tail = self.base_lower_leg_editbones[side].head
+        upper_leg_editbone.tail = self.base_lower_leg_editbones[side].head #NOTA: Al parecer de alguna forma los valores de los huesos base se estan cambiando
+        print("a, {0}, {1}, {2}".format(side, layer, protected))
+        upper_leg_editbone.layers[Layers.get_protected_layer(layer) if protected else layer] = True
         
         lower_leg_editbone = edit_bones.new("MCH_LowerLeg" + suffix + "_" + side)
         lower_leg_editbone.head = self.base_lower_leg_editbones[side].head
         lower_leg_editbone.tail = self.base_foot_editbones[side].head
+        lower_leg_editbone.layers[Layers.get_protected_layer(layer) if protected else layer] = True
         
         foot_editbone = edit_bones.new("MCH_Foot" + suffix + "_" + side)
         foot_editbone.head = self.base_foot_editbones[side].head
         foot_editbone.tail = self.base_foot_editbones[side].tail
+        foot_editbone.layers[layer] = True
         
         toe_editbone = edit_bones.new("MCH_Toe" + suffix + "_" + side)
         toe_editbone.head = self.base_toe_editbones[side].head
         toe_editbone.tail = self.base_toe_editbones[side].tail
+        toe_editbone.layers[layer] = True
         
         upper_leg_editbone.parent = edit_bones[self.leg_parent_names[side]]
         lower_leg_editbone.parent = upper_leg_editbone
@@ -439,7 +449,7 @@ class VRigify:
         return upper_leg_editbone, lower_leg_editbone, foot_editbone, toe_editbone
     
     
-    def create_arm_bones(self, suffix, side):
+    def create_arm_bones(self, suffix, side, layer, protected):
         bpy.ops.object.mode_set(mode='EDIT')
         self.detect_base_arm_bones()
         
@@ -448,16 +458,19 @@ class VRigify:
         upper_arm_editbone.head = self.base_upper_arm_editbones[side].head
         upper_arm_editbone.tail = self.base_lower_arm_editbones[side].head
         upper_arm_editbone.roll = self.base_upper_arm_editbones[side].roll
+        upper_arm_editbone.layers[Layers.get_protected_layer(layer) if protected else layer] = True
         
         lower_arm_editbone = edit_bones.new("MCH_LowerArm" + suffix + "_" + side)
         lower_arm_editbone.head = self.base_lower_arm_editbones[side].head
         lower_arm_editbone.tail = self.base_hand_editbones[side].head
         lower_arm_editbone.roll = self.base_lower_arm_editbones[side].roll
+        lower_arm_editbone.layers[Layers.get_protected_layer(layer) if protected else layer] = True
         
         hand_editbone = edit_bones.new("MCH_Hand" + suffix + "_" + side)
         hand_editbone.head = lower_arm_editbone.tail
         hand_editbone.tail = hand_editbone.head + Vector((0.1 * (1 if side == 'L' else -1), 0, 0))
         hand_editbone.roll = lower_arm_editbone.roll
+        hand_editbone.layers[layer] = True
     
         upper_arm_editbone.parent = edit_bones[self.arm_parent_names[side]]
         lower_arm_editbone.parent = upper_arm_editbone
@@ -482,7 +495,7 @@ class VRigify:
         
     
     def add_leg_fk_chain(self, side):
-        upper_leg_editbone, lower_leg_editbone, foot_editbone, toe_editbone = self.create_leg_bones("_FK", side)
+        upper_leg_editbone, lower_leg_editbone, foot_editbone, toe_editbone = self.create_leg_bones("_FK", side, Layers.fk_leg_l if side == 'L' else Layers.fk_leg_r, protected=False)
         self.upper_leg_fk_names[side] = upper_leg_editbone.name
         self.lower_leg_fk_names[side] = lower_leg_editbone.name
         self.foot_fk_names[side] = foot_editbone.name
@@ -496,7 +509,7 @@ class VRigify:
         
         
     def add_arm_fk_chain(self, side):
-        upper_arm_editbone, lower_arm_editbone, hand_editbone = self.create_arm_bones("_FK", side)
+        upper_arm_editbone, lower_arm_editbone, hand_editbone = self.create_arm_bones("_FK", side, Layers.fk_arm_l if side == 'L' else Layers.fk_arm_r, protected=False)
         self.upper_arm_fk_names[side] = upper_arm_editbone.name
         self.lower_arm_fk_names[side] = lower_arm_editbone.name
         self.hand_fk_names[side] = hand_editbone.name
@@ -523,21 +536,25 @@ class VRigify:
         pole_subtarget_posebone = pose_bones[pole_subtarget_name]
         
         bpy.ops.object.mode_set(mode='POSE')
-        ik_constraint = Utilities.make_ik_constraint(self.armature, second_link_posebone, final_link_posebone)#, pole_subtarget_posebone)
+        ik_constraint = Utilities.make_ik_constraint(self.armature, second_link_posebone, final_link_posebone, pole_subtarget_posebone)#, pole_subtarget_posebone)
         if pole_angle == None:
-            ik_constraint.pole_angle = -3.14159 / 4
+            #ik_constraint.pole_angle = -3.14159 / 4
+            ik_constraint.pole_angle = (-1 if side == "L" else 2) * 3.14159 / 2 #TODO: Solo pude conseguir buenos resultados con pole_angle=0 y roll con z hacia arriba
         else:
             ik_constraint.pole_angle = pole_angle
-        second_link_posebone.lock_ik_y = True
-        second_link_posebone.lock_ik_z = True
-        limit_rot_constraint = second_link_posebone.constraints.new(type="LIMIT_ROTATION")
-        limit_rot_constraint.use_limit_x = True
-        limit_rot_constraint.max_x = 3.14159
+        
+        #second_link_posebone.lock_ik_y = True
+        #second_link_posebone.lock_ik_z = True
+        
+        # This caused some problems, and I'm not certain that it's strictly necessary.
+        #limit_rot_constraint = second_link_posebone.constraints.new(type="LIMIT_ROTATION")
+        #limit_rot_constraint.use_limit_x = True
+        #limit_rot_constraint.max_x = 3.14159
         return pole_subtarget_posebone.name
     
     
     def add_leg_ik_chain(self, side):
-        upper_leg_editbone, lower_leg_editbone, foot_editbone, toe_editbone = self.create_leg_bones("_IK", side)
+        upper_leg_editbone, lower_leg_editbone, foot_editbone, toe_editbone = self.create_leg_bones("_IK", side, Layers.ik_leg_l if side == 'L' else Layers.ik_leg_r, protected=True)
         edit_bones = self.armature.data.edit_bones
         
         foot_ik_control_editbone = edit_bones.new("CTRL_Foot_IK_" + side)
@@ -558,11 +575,12 @@ class VRigify:
         self.foot_ik_names[side] = foot_editbone.name
         self.toe_ik_names[side] = toe_editbone.name
         
-        self.knee_target_names[side] = self.add_ik_chain(side, "CTRL_KneeTarget_", Vector((0, -1, 0)), upper_leg_editbone, lower_leg_editbone, foot_editbone)
-
+        #pole_angle = (-1 if side == "L" else 1) * 3.14159 / 2
+        self.knee_target_names[side] = self.add_ik_chain(side, "CTRL_KneeTarget_", Vector((0, -1, 0)), upper_leg_editbone, lower_leg_editbone, foot_editbone, -3.14159/4)#, pole_angle)
+        #angle = -90
    
     def add_arm_ik_chain(self, side):
-       upper_arm_editbone, lower_arm_editbone, hand_editbone = self.create_arm_bones("_IK", side)
+       upper_arm_editbone, lower_arm_editbone, hand_editbone = self.create_arm_bones("_IK", side, Layers.ik_arm_l if side == 'L' else Layers.ik_arm_r, protected=True)
        edit_bones = self.armature.data.edit_bones
        hand_editbone.parent = None
        hand_editbone.roll = lower_arm_editbone.roll
@@ -571,7 +589,8 @@ class VRigify:
        self.lower_arm_ik_names[side] = lower_arm_editbone.name
        self.hand_ik_names[side] = hand_editbone.name
        
-       self.elbow_target_names[side] = self.add_ik_chain(side, "CTRL_ElbowTarget_", Vector((0, 1, 0)), upper_arm_editbone, lower_arm_editbone, hand_editbone, 3.14159 / 2)
+       angle = 5 * 3.14159 / 6 * (-1 if side == 'L' else 1)
+       self.elbow_target_names[side] = self.add_ik_chain(side, "CTRL_ElbowTarget_", Vector((0, 1, 0)), upper_arm_editbone, lower_arm_editbone, hand_editbone, angle)
               
         
     def setup_fkik_mechanism(self, side, owner_posebones, target_posebones): # Necessary?
@@ -582,7 +601,7 @@ class VRigify:
         # Set base bones to copy FK chain rotations
         pose_bones = self.armature.pose.bones
         for i in range(len(owner_posebones)):
-            Utilities.make_copy_rot_constraint(self.armature, owner_posebones[i], target_posebones[i])
+            Utilities.make_copy_rot_constraint(self.armature, owner_posebones[i], target_posebones[i]) #Probably should include 'LOCAL_PARENT' argument
         
         
     def setup_ik_driver(self, side, owner_posebone, target_ik_posebone, driver_suffix):
@@ -648,8 +667,9 @@ class VRigify:
         palm_editbone.tail = palm_editbone.head + Vector((0.06 * (1 if side == 'L' else -1), 0, 0))
         palm_editbone.roll = (0 if side == 'L' else 1) * 3.14159 #/ 2 # Assuming right hand side (most likely wrong for left hand). Non-magic numbers may be preferable
         palm_editbone.parent = self.base_hand_editbones[side] # Will almost certainly need to change
-        self.palm_names[side] = palm_editbone.name
         palm_editbone_name = palm_editbone.name
+        self.palm_names[side] = palm_editbone_name
+        
         
         fingers_editbone = edit_bones.new("CTRL_Fingers_" + side)
         fingers_editbone.head = palm_editbone.tail
@@ -670,10 +690,11 @@ class VRigify:
         middle_fingers = self.add_finger_chain(side, "Middle", palm_editbone, fingers_editbone, fingertips_editbone)
         index_fingers = self.add_finger_chain(side, "Index", palm_editbone, fingers_editbone, fingertips_editbone)
         
-        little_finger_names = [finger.name for finger in little_fingers]
-        ring_finger_names = [finger.name for finger in ring_fingers]
-        middle_finger_names = [finger.name for finger in middle_fingers]
+        little_finger_names = [finger.name for finger in little_fingers]	
+        ring_finger_names = [finger.name for finger in ring_fingers]	
+        middle_finger_names = [finger.name for finger in middle_fingers]	
         index_finger_names = [finger.name for finger in index_fingers]
+        
         
         # TODO: Save names and reference them later
         
@@ -682,9 +703,9 @@ class VRigify:
         palm_posebone = pose_bones[palm_editbone_name]
         
         fingers_posebone = pose_bones[fingers_name]
-        self.lock_rotation(fingers_posebone, 'Z')
+        self.lock_rotation(fingers_posebone, 'X')
         fingertips_posebone = pose_bones[fingertips_name]
-        self.lock_rotation(fingertips_posebone, 'Z')
+        self.lock_rotation(fingertips_posebone, 'X')
         
         def set_finger_chain_constraints(finger_names_list, influence):
             finger0_posebone = pose_bones[finger_names_list[0]]
@@ -783,37 +804,37 @@ class VRigify:
         
         edit_bones = self.armature.data.edit_bones
         hips_control_editbone = edit_bones.new("CTRL_Hips")
-        #hips_control_editbone.layers[Layers.ctrl] = True
+        hips_control_editbone.layers[Layers.ctrl] = True
         hips_control_editbone.head = spine_parent_editbone.head
         hips_control_editbone.tail = hips_control_editbone.head + offset
         hips_control_editbone.roll = spine_parent_editbone.roll
         self.hips_control_name = hips_control_editbone.name
-        
         edit_bones["J_Bip_C_Hips"].parent = hips_control_editbone
         
         chest_control_editbone = edit_bones.new("CTRL_Chest")
-        #chest_control_editbone.layers[Layers.ctrl] = True
+        chest_control_editbone.layers[Layers.ctrl] = True
+        #chest_control_editbone.head = lower_chest_parent_editbone.tail
         chest_control_editbone.head = upper_chest_parent_editbone.tail
         chest_control_editbone.tail = chest_control_editbone.head + offset
         chest_control_editbone.roll = upper_chest_parent_editbone.roll
         self.chest_control_name = chest_control_editbone.name
         
-        hips_control_editbone_name = hips_control_editbone.name
-        hips_parent_editbone_name = hips_parent_editbone.name
-        spine_parent_editbone_name = spine_parent_editbone.name
-        chest_parent_editbone_name = chest_parent_editbone.name
-        upper_chest_parent_editbone_name = upper_chest_parent_editbone.name
+        hips_control_editbone_name = hips_control_editbone.name	
+        hips_parent_editbone_name = hips_parent_editbone.name	
+        spine_parent_editbone_name = spine_parent_editbone.name	
+        chest_parent_editbone_name = chest_parent_editbone.name	
+        upper_chest_parent_editbone_name = upper_chest_parent_editbone.name	
         chest_control_editbone_name = chest_control_editbone.name
         
         bpy.ops.object.mode_set(mode='POSE')
         pose_bones = self.armature.pose.bones
         
-        hips_control_posebone = pose_bones[hips_control_editbone_name]
-        hips_parent_posebone = pose_bones[hips_parent_editbone_name]
-        spine_parent_posebone = pose_bones[spine_parent_editbone_name]
-        chest_parent_posebone = pose_bones[chest_parent_editbone_name]
-        upper_chest_parent_posebone = pose_bones[upper_chest_parent_editbone_name]
-        chest_control_posebone = pose_bones[chest_control_editbone_name]
+        hips_control_posebone = pose_bones[hips_control_editbone_name]	
+        hips_parent_posebone = pose_bones[hips_parent_editbone_name]	
+        spine_parent_posebone = pose_bones[spine_parent_editbone_name]	
+        chest_parent_posebone = pose_bones[chest_parent_editbone_name]	
+        upper_chest_parent_posebone = pose_bones[upper_chest_parent_editbone_name]	
+        chest_control_posebone = pose_bones[chest_control_editbone_name]  
 
 #        hips_control_posebone = pose_bones[hips_control_editbone.name]
 #        hips_parent_posebone = pose_bones[hips_parent_editbone.name]
@@ -821,8 +842,6 @@ class VRigify:
 #        chest_parent_posebone = pose_bones[chest_parent_editbone.name]
 #        upper_chest_parent_posebone = pose_bones[upper_chest_parent_editbone.name]
 #        chest_control_posebone = pose_bones[chest_control_editbone.name]
-        
-        
         
         spine_constraint = spine_parent_posebone.constraints.new(type="COPY_LOCATION")
         spine_constraint.target = self.armature
@@ -837,42 +856,98 @@ class VRigify:
         
         
     def setup_neck_mechanism(self):
+        print("setup_neck_mechanism()")
         bpy.ops.object.mode_set(mode='EDIT')
         edit_bones = self.armature.data.edit_bones
         neck_editbone = edit_bones["J_Bip_C_Neck"]
         head_editbone = edit_bones["J_Bip_C_Head"]
+        neck_bip_name = neck_editbone.name
+        head_bip_name = head_editbone.name
         
         upper_chest_editbone = edit_bones["J_Bip_C_UpperChest"]
         
         offset = Vector((0, 0, 0.03))
-        head_parent = edit_bones.new("MCH_Head_Parent")
+        #head_parent = edit_bones.new("MCH_Head_Parent")
+        
+        neck_mch_helper_editbone = edit_bones.new("MCH_Neck_Helper")
+        neck_mch_helper_editbone.layers[Layers.mch] = True
+        neck_mch_helper_editbone.head = neck_editbone.head
+        neck_mch_helper_editbone.tail = neck_mch_helper_editbone.head + offset
+        neck_mch_helper_editbone.roll = neck_editbone.roll
+        neck_mch_helper_name = neck_mch_helper_editbone.name
+        
+        neck_mch_editbone = edit_bones.new("MCH_Neck")
+        neck_mch_editbone.layers[Layers.mch] = True
+        neck_mch_editbone.head = neck_editbone.head
+        neck_mch_editbone.tail = neck_editbone.tail
+        neck_mch_editbone.roll = neck_editbone.roll
+        neck_mch_editbone.parent = neck_mch_helper_editbone
+        neck_mch_name = neck_mch_editbone.name
+        
+        head_mch_helper_editbone = edit_bones.new("MCH_Head_Helper")
+        head_mch_helper_editbone.layers[Layers.mch] = True
+        head_mch_helper_editbone.head = head_editbone.head
+        head_mch_helper_editbone.tail = head_editbone.head + offset
+        head_mch_helper_editbone.roll = head_editbone.roll
+        head_mch_helper_editbone.parent = neck_mch_editbone
+        head_mch_helper_name = head_mch_helper_editbone.name
+        
+        head_mch_editbone = edit_bones.new("MCH_Head")
+        head_mch_editbone.layers[Layers.mch] = True
+        head_mch_editbone.head = head_editbone.head
+        head_mch_editbone.tail = head_editbone.tail
+        head_mch_editbone.roll = head_editbone.roll
+        head_mch_editbone.parent = head_mch_helper_editbone
+        head_mch_name = head_mch_editbone.name
         
         self.add_neck_socket_mechanism()
-        
-        head_editbone_name = head_editbone.name
         bpy.ops.object.mode_set(mode='EDIT')
-        neck_control_name = "CTRL_Neck"
-        neck_control = edit_bones.new(neck_control_name)
         
-        #neck_control.layers[Layers.ctrl] = True
+        neck_control = edit_bones.new("CTRL_Neck")
+        neck_control.layers[Layers.ctrl] = True
         neck_control.head = edit_bones[self.neck_parent_name].head
         neck_control.tail = neck_control.head + Vector((0, 0, 0.05))
-        neck_control.roll = neck_editbone.roll
+        neck_control.roll = edit_bones[neck_bip_name].roll # It's necessary to look up on a name basis due to the mode change
+        #neck_control_name = self.neck_name
         self.neck_name = neck_control.name
+        
+        head_control = edit_bones.new("CTRL_Head")
+        head_control.layers[Layers.ctrl] = True
+        head_control.head = edit_bones[neck_control.name].tail
+        head_control.tail = head_control.head + Vector((0, 0, 0.05))
+        #head_control.roll = head_editbone.roll
+        head_control.roll = edit_bones[head_bip_name].roll
+        self.head_name = head_control.name
+        
         bpy.ops.object.mode_set(mode='POSE')
-
         pose_bones = self.armature.pose.bones
-        neck_control = pose_bones[neck_control_name]
         neck_parent_posebone = pose_bones[self.neck_parent_name]
-        head_posebone = pose_bones[head_editbone_name]
+        head_posebone = pose_bones[head_bip_name]
+        neck_posebone = pose_bones[neck_bip_name]
+        head_control = pose_bones[self.head_name]
+        neck_control = pose_bones[self.neck_name]
+        head_mch_posebone = pose_bones[head_mch_name]
+        neck_mch_posebone = pose_bones[neck_mch_name]
+        head_mch_helper_posebone = pose_bones[head_mch_helper_name]
+        neck_mch_helper_posebone = pose_bones[neck_mch_helper_name]
+        
         parent_constraint = Utilities.make_copy_rot_constraint(self.armature, neck_parent_posebone, neck_control, 'LOCAL')
         parent_constraint.influence = 0.5
+        Utilities.make_copy_rot_constraint(self.armature, neck_posebone, neck_mch_posebone, 'LOCAL')
+        Utilities.make_copy_rot_constraint(self.armature, head_posebone, head_mch_posebone, 'LOCAL')
+        Utilities.make_copy_rot_constraint(self.armature, neck_mch_posebone, neck_control, 'LOCAL')
+        Utilities.make_copy_rot_constraint(self.armature, head_posebone, head_mch_posebone, 'LOCAL')
+        Utilities.make_copy_rot_constraint(self.armature, head_mch_posebone, head_control, 'LOCAL')
+        
         bpy.context.active_object.data.bones.active = neck_parent_posebone.bone
         context = bpy.context.copy()
         context["constraint"] = neck_parent_posebone.constraints[parent_constraint.name]
-        bpy.ops.constraint.move_up(context, constraint=parent_constraint.name, owner='BONE') # TODO: Change so that it no longer uses bpy.ops and instead uses constraints.move()
-        Utilities.make_copy_rot_constraint(self.armature, head_posebone, neck_control, 'LOCAL')
-        
+        #context["constraint"] = neck_posebone.constraints[neck_posebone_constraint.name]
+        bpy.ops.constraint.move_up(context, constraint=parent_constraint.name, owner='BONE')
+        #bpy.ops.constraint.move_up(context, constraint=neck_posebone_constraint.name, owner='BONE')
+        #Utilities.make_copy_rot_constraint(self.armature, head_posebone, neck_control, 'LOCAL')
+        #Utilities.make_copy_rot_constraint(self.armature, neck_posebone, neck_mch_posebone, 'LOCAL')
+        #Utilities.make_copy_rot_constraint(self.armature, head_posebone, head_mch_posebone, 'LOCAL')
         
     def setup_global_control(self):
         bpy.ops.object.mode_set(mode='EDIT')
@@ -907,11 +982,12 @@ class VRigify:
         self.armature.pose.bones[editbone_name].custom_shape = ob
         bpy.ops.object.mode_set(mode='EDIT')
         
-        if "Widgets" not in bpy.data.collections.keys():
-            widgets_collection = bpy.data.collections.new("Widgets")
-            bpy.context.scene.collection.children.link(widgets_collection)
-        bpy.context.scene.collection.objects.unlink(ob)
-        bpy.data.collections["Widgets"].objects.link(ob)
+#        if "Widgets" not in bpy.data.collections.keys():
+#            widgets_collection = bpy.data.collections.new("Widgets")
+#            bpy.context.scene.collection.children.link(widgets_collection)
+#        if ob in bpy.context.scene.collection.objects.keys():
+#            bpy.context.scene.collection.objects.unlink(ob)
+#        bpy.data.collections["Widgets"].objects.link(ob)
         
         
     def create_cuboid_widget(self, name, editbone, half_sizes, offset=Vector((0,0,0))):
@@ -938,6 +1014,17 @@ class VRigify:
         circle_edges = [(i, (i+1)%len(circle_verts)) for i in range(len(circle_verts))]
         self.create_widget(name, editbone, circle_verts, circle_edges)
         
+    def create_sphere_widget(self, name, editbone, radius):
+        steps_amount = 18
+        # Unnecessary garbage?
+        verts_along_y = [ (radius*cos(theta), 0, radius*sin(theta)) for theta in [2 * i * 3.14159/steps_amount for i in range(steps_amount)]]
+        verts_along_x = [ (0, v[0], v[2]) for v in verts_along_y ]
+        verts_along_z = [ (v[0], v[2], 0) for v in verts_along_y ]
+        circle_verts = verts_along_y[:]
+        circle_verts.extend(verts_along_x)
+        circle_verts.extend(verts_along_z) 
+        circle_edges = [(i, (i+1)%len(circle_verts)) for i in range(len(circle_verts)) if i != steps_amount ]
+        self.create_widget(name, editbone, circle_verts, circle_edges)
     
     def create_hips_widget(self):
         hips_editbone = self.armature.data.edit_bones["CTRL_Hips"]
@@ -974,7 +1061,8 @@ class VRigify:
             return
         foot_editbone = self.armature.data.edit_bones[self.foot_ik_control_names[side]]
         self.create_cuboid_widget("WGT_Foot_IK_" + side, foot_editbone, Vector((0.3, 0.9, 0.4)), Vector((0.0, 0.9, 0.0)))
-        
+        target_editbone = self.armature.data.edit_bones[self.knee_target_names[side]]
+        self.create_sphere_widget("WGT_KneeTarget_" + side, target_editbone, 0.1)
         
     def create_leg_fk_widgets(self, side=None):
         if side == None:
@@ -997,7 +1085,8 @@ class VRigify:
             return
         hand_editbone = self.armature.data.edit_bones["MCH_Hand_IK_" + side]
         self.create_cuboid_widget("WGT_Hand_IK_" + side, hand_editbone, Vector((0.3, 0.9, 0.3)), Vector((0.0, 0.9, 0.0)))
-        
+        target_editbone = self.armature.data.edit_bones[self.elbow_target_names[side]]
+        self.create_sphere_widget("WGT_ElbowTarget_" + side, target_editbone, 0.1)
         
     def create_toe_widget(self, side=None):
         if side == None:
@@ -1007,13 +1096,36 @@ class VRigify:
         self.detect_base_leg_bones()
         edit_bones = self.armature.data.edit_bones
         self.create_circle_widget("WGT_Toe_" + side, edit_bones[self.toe_fk_names[side]], 1.0)
-        self.create_circle_widget("WGT_Toe_" + side, edit_bones[self.toe_ik_names[side]], 1.0)
+        #self.create_circle_widget("WGT_Toe_" + side, edit_bones[self.toe_ik_names[side]], 1.0)
+        self.create_sphere_widget("WGT_Toe_" + side, edit_bones[self.toe_ik_names[side]], 1.0)
+        
+#    def create_ik_targets_widgets(self, side=None):
+#        if side == None:
+#            create_ik_targets_widgets(self, 'L')
+#            create_ik_targets_widgets(self, 'R')
+#        edit_bones = self.armature.data.edit_bones
+#        self.create_sphere_widget("WGT_KneeTarget_" + side, edit_bones[self.knee_target_names[side]], 0.1)
+#        self.create_sphere_widget("WGT_ElbowTarget_" + side, edit_bones[self.elbow_target_names[side]], 0.1)
     
     def create_global_widget(self):
         self.create_circle_widget("WGT_Global", self.armature.data.edit_bones[self.global_name], 5)
     
+    def error_log(self, error):
+        print("Error!")
+        print(error)
+        print(error.with_traceback)
+        #self.reset()
+            
     def setup_all(self):
+        print("Running")
+#        error_counter = 0
+#        try:
+#            if error_counter >= 10:
+#                print("Too many errors!")
+#            else:
         self.reset()
+        self.detect_skirt_bones()
+        self.set_skirt_bone_layers()
         self.normalize_base_leg_bone_rolls()
         self.setup_leg_rig()
         self.setup_arm_rig()
@@ -1028,7 +1140,15 @@ class VRigify:
         self.create_foot_ik_widget()
         self.create_toe_widget()
         #self.create_neck_widget()
-        self.create_global_widget()
+        self.create_global_widget()              
+#        except UnicodeError as error:
+#            self.error_log(error)
+#            self.setup_all()
+#        except KeyError as error:
+#            self.error_log(error)
+#            self.setup_all()
+#        print("vrigify completed with {} errors.".format(error_counter))
+        print("vrigify completed with no errors.")
         
         
 if __name__ == '__main__':
@@ -1036,4 +1156,15 @@ if __name__ == '__main__':
     
     vrig = VRigify(armature)
     vrig.setup_all()
+    
+###TODOS:
+#    -- Fix right arm rolls (IK)
+#    Set lock leg mechanism
+#    Set head follows target mechanism 
+#    .. Fix foreleg offset in edit mode # Apparently the issue is with x-axis mirroring, which I don't know how to fix
+#    Make chest widget follow its own rotation
+#    Make shoulder widget, probably set constraint
+#    Make head and neck widget
+#    Make hair rig
+###
     
